@@ -5,7 +5,7 @@ use std::ffi::{CString, c_void};
 
 #[inline]
 fn check(r: sys::hipError_t) -> Result<(), DriverError> {
-    if r == sys::HIP_SUCCESS {
+    if r == sys::hipError_t::hipSuccess {
         Ok(())
     } else {
         Err(DriverError::Hip(r))
@@ -71,7 +71,7 @@ pub unsafe fn memcpy_htod_async(
 ) -> Result<(), DriverError> {
     unsafe {
         check(sys::hipMemcpyHtoDAsync(
-            dst as *mut c_void,
+            dst as sys::hipDeviceptr_t,
             src.as_ptr() as *const c_void,
             src.len(),
             stream,
@@ -91,7 +91,7 @@ pub unsafe fn memcpy_dtoh_async(
     unsafe {
         check(sys::hipMemcpyDtoHAsync(
             dst.as_mut_ptr() as *mut c_void,
-            src as *const c_void,
+            src as sys::hipDeviceptr_t,
             dst.len(),
             stream,
         ))

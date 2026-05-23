@@ -10,7 +10,7 @@ pub mod sys;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DriverError {
-    #[error("HIP error code {0}")]
+    #[error("HIP error: {0:?}")]
     Hip(sys::hipError_t),
     #[error("kernel name contained a null byte")]
     InvalidName,
