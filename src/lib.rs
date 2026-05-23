@@ -7,5 +7,10 @@
 pub mod driver;
 pub mod hiprtc;
 
+#[cfg(feature = "rocblas")]
+pub mod rocblas;
+#[cfg(feature = "hipblaslt")]
+pub mod hipblaslt;
+
 pub use driver::{DevicePtr, DriverError, HipContext, HipFunction, HipModule, HipSlice, HipStream};
 pub use hiprtc::{HiprtcError, Hsaco};

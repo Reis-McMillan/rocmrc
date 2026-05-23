@@ -1,13 +1,13 @@
 //! End-to-end "hello world" — proves the hipRTC → hipModule → launch path.
 //!
 //! Run:
-//!   ROCM_PATH=/opt/rocm HIPARC_GFX=gfx1100 cargo run --example vec_add
+//!   ROCM_PATH=/opt/rocm ROCMRC_GFX=gfx1100 cargo run --example vec_add
 //!
-//! `HIPARC_GFX` defaults to `gfx1100` (RDNA3). Override for your card.
+//! `ROCMRC_GFX` defaults to `gfx1100` (RDNA3). Override for your card.
 //! Common values: gfx1100/1101/1102 (RDNA3), gfx1200+ (RDNA4),
 //! gfx90a (MI200), gfx942 (MI300).
 
-use hiparc::{HipContext, HipModule};
+use rocmrc::{HipContext, HipModule};
 use std::ffi::c_void;
 
 const SRC: &str = r#"
@@ -19,14 +19,14 @@ void vec_add(float* out, const float* a, const float* b, int n) {
 "#;
 
 fn main() {
-    let arch = std::env::var("HIPARC_GFX").unwrap_or_else(|_| "gfx1102".to_string());
+    let arch = std::env::var("ROCMRC_GFX").unwrap_or_else(|_| "gfx1102".to_string());
 
     let ctx = HipContext::new(0, &arch).expect("HipContext::new failed");
     let stream = ctx.default_stream();
     println!("device  = {}", ctx.name().unwrap_or_else(|_| "<unknown>".into()));
     println!("gfx     = {}", ctx.gfx_arch());
 
-    let (hsaco, log) = hiparc::hiprtc::compile(SRC, ctx.gfx_arch()).expect("hipRTC compile");
+    let (hsaco, log) = rocmrc::hiprtc::compile(SRC, ctx.gfx_arch()).expect("hipRTC compile");
     if !log.trim().is_empty() {
         eprintln!("hipRTC log:\n{log}");
     }
@@ -43,13 +43,13 @@ fn main() {
     let d_out = ctx.alloc::<f32>(N).unwrap();
 
     unsafe {
-        hiparc::driver::result::memcpy_htod_async(
+        rocmrc::driver::result::memcpy_htod_async(
             d_a.device_ptr(),
             bytemuck::cast_slice(&a),
             stream.hip_stream(),
         )
         .unwrap();
-        hiparc::driver::result::memcpy_htod_async(
+        rocmrc::driver::result::memcpy_htod_async(
             d_b.device_ptr(),
             bytemuck::cast_slice(&b),
             stream.hip_stream(),
@@ -79,7 +79,7 @@ fn main() {
 
     let mut out_bytes = vec![0u8; N * std::mem::size_of::<f32>()];
     unsafe {
-        hiparc::driver::result::memcpy_dtoh_async(
+        rocmrc::driver::result::memcpy_dtoh_async(
             &mut out_bytes,
             d_out.device_ptr(),
             stream.hip_stream(),

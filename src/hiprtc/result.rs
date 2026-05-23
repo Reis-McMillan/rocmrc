@@ -5,7 +5,7 @@ use std::ffi::CString;
 
 #[inline]
 fn check(r: sys::hiprtcResult) -> Result<(), HiprtcError> {
-    if r == sys::HIPRTC_SUCCESS {
+    if r == sys::hiprtcResult::HIPRTC_SUCCESS {
         Ok(())
     } else {
         Err(HiprtcError::Hiprtc(r))

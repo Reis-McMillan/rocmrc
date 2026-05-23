@@ -1,0 +1,13 @@
+[package]
+name = "bindings_generator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+bindgen = "0.72"
+clap = { version = "4", features = ["derive", "env"] }
+rayon = "1"
+indicatif = "0.18"
+log = "0.4"
+env_logger = "0.11"
