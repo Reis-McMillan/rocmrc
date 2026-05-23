@@ -34,6 +34,18 @@ fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let args = Args::parse();
+
+    // bindgen looks up libclang via $LIBCLANG_PATH. ROCm ships its own LLVM
+    // (matched to the HIP headers' version), so point at that if the user
+    // hasn't already set one. Must happen before rayon spawns worker threads —
+    // `set_var` is racy if other threads exist.
+    if std::env::var_os("LIBCLANG_PATH").is_none() {
+        let libclang = args.rocm_path.join("llvm").join("lib");
+        // SAFETY: single-threaded at this point; no other threads are reading env.
+        unsafe { std::env::set_var("LIBCLANG_PATH", &libclang) };
+        log::info!("LIBCLANG_PATH={}", libclang.display());
+    }
+
     let mut modules = create_modules();
     if let Some(t) = &args.target {
         modules.retain(|m| m.rocmrc_name.contains(t));
