@@ -19,7 +19,7 @@ void vec_add(float* out, const float* a, const float* b, int n) {
 "#;
 
 fn main() {
-    let arch = std::env::var("HIPARC_GFX").unwrap_or_else(|_| "gfx1100".to_string());
+    let arch = std::env::var("HIPARC_GFX").unwrap_or_else(|_| "gfx1102".to_string());
 
     let ctx = HipContext::new(0, &arch).expect("HipContext::new failed");
     let stream = ctx.default_stream();
