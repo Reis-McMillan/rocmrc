@@ -1,0 +1,15 @@
+[package]
+name = "hiparc"
+version = "0.1.0"
+edition = "2024"
+description = "Minimal safe HIP/ROCm bindings, modeled after cudarc"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+thiserror = "1.0"
+
+[dev-dependencies]
+bytemuck = "1.16"
+
+[[example]]
+name = "vec_add"
