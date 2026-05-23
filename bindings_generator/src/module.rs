@@ -245,6 +245,9 @@ pub fn create_modules() -> Vec<ModuleConfig> {
                 types: vec!["^hipblas(Lt)?.*"],
                 vars: vec!["^HIPBLAS.*"],
             },
+            // hipblaslt.h transitively #include's C++ headers (e.g. <memory>),
+            // so the wrapper must be parsed as C++.
+            clang_args: vec!["-x", "c++"],
             libs: vec!["hipblaslt"],
             module_dependencies: vec!["driver"],
             ..Default::default()
