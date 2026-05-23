@@ -10,17 +10,29 @@ fn main() {
     println!("cargo:rerun-if-env-changed=ROCM_PATH");
     println!("cargo:rerun-if-changed=src/driver/sys/wrapper.h");
 
-    let bindings = bindgen::Builder::default()
+    let resource_dir = std::process::Command::new(format!("{rocm_path}/llvm/bin/clang"))
+        .arg("--print-resource_dir")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+
+    let mut builder = bindgen::Builder::default()
         .header("src/driver/sys/wrapper.h")
-        .clang_arg(format!("-I{rocm_path}/include"))
+        .clang_arg(format!("-I{rocm_path}/include"));
+    
+    if let Some(rd) = resource_dir {
+        builder = builder.clang_arg(format!("-resource-dir={rd}"));
+    }
+
+    let bindings = builder
         .allowlist_function("hip.*")
         .allowlist_type("hip.*")
         .allowlist_var("(hip|HIP)_.*")
-        .default_enum_style(bindgen::EnumVariation::NewType { is_bitfield: false, is_global: false })
+        .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: false })
         .generate()
         .expect("bindgen");
-
-    bindings
-        .write_to_file("src/driver/sys/sys.rs")
-        .expect("write bindings");
-}
+        bindings
+            .write_to_file("src/driver/sys/sys.rs")
+            .expect("write bindings");
+    }
