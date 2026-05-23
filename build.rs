@@ -11,21 +11,21 @@ fn main() {
     println!("cargo:rerun-if-changed=src/driver/sys/wrapper.h");
 
     let resource_dir = std::process::Command::new(format!("{rocm_path}/llvm/bin/clang"))
-        .arg("--print-resource_dir")
+        .arg("--print-resource-dir")
         .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string());
+        .expect("failed to invoke ROCm clang");
 
-    let mut builder = bindgen::Builder::default()
+    let rd = String::from_utf8(resource_dir.stdout)
+        .expect("clang resource-dir not utf8")
+        .trim()
+        .to_string();
+
+    assert!(!rd.is_empty(), "clang --print-resource-dir returned empty");
+
+    let bindings = bindgen::Builder::default()
         .header("src/driver/sys/wrapper.h")
-        .clang_arg(format!("-I{rocm_path}/include"));
-    
-    if let Some(rd) = resource_dir {
-        builder = builder.clang_arg(format!("-resource-dir={rd}"));
-    }
-
-    let bindings = builder
+        .clang_arg(format!("-I{rocm_path}/include"))
+        .clang_arg(format!("-resource-dir={rd}"))
         .allowlist_function("hip.*")
         .allowlist_type("hip.*")
         .allowlist_var("(hip|HIP)_.*")
