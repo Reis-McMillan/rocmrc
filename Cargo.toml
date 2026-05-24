@@ -16,9 +16,18 @@ hipblaslt = []
 
 [dependencies]
 thiserror = "1.0"
+half = "2"
 
 [dev-dependencies]
 bytemuck = "1.16"
 
 [[example]]
 name = "vec_add"
+
+[[example]]
+name = "sgemm"
+required-features = ["rocblas"]
+
+[[example]]
+name = "matmul_lt"
+required-features = ["hipblaslt"]

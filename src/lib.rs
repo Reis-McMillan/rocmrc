@@ -14,3 +14,14 @@ pub mod hipblaslt;
 
 pub use driver::{DevicePtr, DriverError, HipContext, HipFunction, HipModule, HipSlice, HipStream};
 pub use hiprtc::{HiprtcError, Hsaco};
+
+#[cfg(feature = "rocblas")]
+pub use rocblas::{
+    Axpy, AxpyConfig, Copy, CopyConfig, Dot, DotConfig, Gemm, GemmConfig, Gemv, GemvConfig, Nrm2,
+    Nrm2Config, Operation, RocblasError, RocblasHandle, Scal, ScalConfig, StridedBatchedConfig,
+};
+
+#[cfg(feature = "hipblaslt")]
+pub use hipblaslt::{
+    HipBlasLt, HipBlasLtError, MatmulDesc, MatmulHeuristic, MatmulPref, MatrixLayout,
+};

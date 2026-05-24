@@ -18,11 +18,8 @@ impl Version {
         }
     }
 
-    /// Cargo feature name for this version. cudarc uses two encodings:
-    ///   - "cuda" prefix encodes major.minor.patch (e.g. cuda-12080)
-    ///   - other prefixes encode major.minor only, dropping patch (e.g. nccl-02027)
     pub fn feature_name(&self, prefix: &str) -> String {
-        if prefix == "cuda" || prefix == "rocm" {
+        if prefix == "rocm" {
             format!("{prefix}-{:02}{:02}{}", self.major, self.minor, self.patch)
         } else {
             format!("{prefix}-{:02}{:03}", self.major, self.minor)
