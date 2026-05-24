@@ -7,7 +7,7 @@ pub mod sys;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HiprtcError {
-    #[error("hipRTC error code {0}")]
+    #[error("hipRTC error code {0:?}")]
     Hiprtc(sys::hiprtcResult),
     #[error("source contained an interior null byte")]
     NullInSource,

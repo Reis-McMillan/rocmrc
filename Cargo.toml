@@ -12,7 +12,19 @@ license = "MIT OR Apache-2.0"
 default = []
 rocblas = []
 hipblaslt = []
+
+# ROCm version axis. Consumers pick exactly one to select which committed
+# binding (under src/<mod>/sys/linked/sys_<ver>.rs) the merged sys.rs includes.
+# Versions added on demand as `bindings_generator` is run on a matching install.
+"rocm-06000" = []
+"rocm-06010" = []
+"rocm-06020" = []
 "rocm-06030" = []
+"rocm-06040" = []
+"rocm-07000" = []
+"rocm-07010" = []
+"rocm-07020" = []
+"rocm-07021" = []
 
 [dependencies]
 thiserror = "1.0"

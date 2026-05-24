@@ -53,7 +53,9 @@ pub struct RocblasHandle {
 impl RocblasHandle {
     pub fn new(stream: Arc<HipStream>) -> Result<Arc<Self>, RocblasError> {
         let raw = result::create_handle()?;
-        result::set_stream(raw, stream.hip_stream())?;
+        // driver::sys and rocblas::sys each redeclare ihipStream_t, so rustc
+        // sees them as distinct types despite identical layout. Cast at the bridge.
+        result::set_stream(raw, stream.hip_stream().cast())?;
         Ok(Arc::new(Self { raw, stream }))
     }
 

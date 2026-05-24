@@ -318,7 +318,9 @@ impl HipBlasLt {
                 heuristic.algo(),
                 workspace,
                 workspace_size,
-                stream.hip_stream(),
+                // driver::sys and hipblaslt::sys each redeclare ihipStream_t;
+                // rustc treats them as distinct nominal types. Cast at the bridge.
+                stream.hip_stream().cast(),
             )
         }
     }
