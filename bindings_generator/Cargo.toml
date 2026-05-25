@@ -2,6 +2,9 @@
 name = "bindings_generator"
 version = "0.1.0"
 edition = "2024"
+# Workspace dev tool; not a published crate. Keeps `cargo publish --workspace`
+# from accidentally pushing it to crates.io.
+publish = false
 
 [dependencies]
 anyhow = "1"

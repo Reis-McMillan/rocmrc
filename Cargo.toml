@@ -7,6 +7,13 @@ version = "0.1.0"
 edition = "2024"
 description = "Minimal safe ROCm bindings (HIP, hipRTC), modeled after cudarc"
 license = "MIT OR Apache-2.0"
+authors = ["Reis McMillan <reis@mcmlln.dev>"]
+repository = "https://github.com/Reis-McMillan/rocmrc"
+homepage = "https://github.com/Reis-McMillan/rocmrc"
+documentation = "https://docs.rs/rocmrc"
+readme = "README.md"
+keywords = ["rocm", "hip", "gpu", "rocblas", "hipblaslt"]
+categories = ["external-ffi-bindings", "hardware-support", "science"]
 
 [features]
 default = []
