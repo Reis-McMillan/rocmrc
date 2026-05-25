@@ -3,15 +3,13 @@
 //! Computes D = ReLU(A * B + bias) in column-major f32 and compares to a CPU
 //! reference.
 //!
-//! Run:
-//!   ROCM_PATH=/opt/rocm cargo run --features rocm-07021,hipblaslt --example matmul_lt
+//! Run (pick any rocm-XYYYY feature matching the installed ROCm version):
+//!   ROCM_PATH=/opt/rocm cargo run --features hipblaslt,rocm-07021 --example matmul_lt
 
 use rocmrc::driver::{HipContext, HipSlice, result as drv};
 use rocmrc::hipblaslt::{
     HipBlasLt, MatmulDesc, MatmulPref, MatrixLayout,
-    sys::{
-        hipDataType, hipblasComputeType_t, hipblasLtEpilogue_t, hipblasOperation_t,
-    },
+    hipDataType, hipblasComputeType_t, hipblasLtEpilogue_t, hipblasOperation_t,
 };
 
 fn main() {

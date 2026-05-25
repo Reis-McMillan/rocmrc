@@ -1,5 +1,8 @@
 //! End-to-end "hello world" — proves the hipRTC → hipModule → launch path.
 //!
+//! Uses only driver + hiprtc, which are always-on modules. No rocm-XYYYY
+//! feature is required to compile or run this example.
+//!
 //! Run:
 //!   ROCM_PATH=/opt/rocm ROCMRC_GFX=gfx1100 cargo run --example vec_add
 //!
@@ -7,6 +10,7 @@
 //! Common values: gfx1100/1101/1102 (RDNA3), gfx1200+ (RDNA4),
 //! gfx90a (MI200), gfx942 (MI300).
 
+use rocmrc::driver::result as drv;
 use rocmrc::{HipContext, HipModule};
 use std::ffi::c_void;
 
@@ -43,13 +47,13 @@ fn main() {
     let d_out = ctx.alloc::<f32>(N).unwrap();
 
     unsafe {
-        rocmrc::driver::result::memcpy_htod_async(
+        drv::memcpy_htod_async(
             d_a.device_ptr(),
             bytemuck::cast_slice(&a),
             stream.hip_stream(),
         )
         .unwrap();
-        rocmrc::driver::result::memcpy_htod_async(
+        drv::memcpy_htod_async(
             d_b.device_ptr(),
             bytemuck::cast_slice(&b),
             stream.hip_stream(),
@@ -79,7 +83,7 @@ fn main() {
 
     let mut out_bytes = vec![0u8; N * std::mem::size_of::<f32>()];
     unsafe {
-        rocmrc::driver::result::memcpy_dtoh_async(
+        drv::memcpy_dtoh_async(
             &mut out_bytes,
             d_out.device_ptr(),
             stream.hip_stream(),

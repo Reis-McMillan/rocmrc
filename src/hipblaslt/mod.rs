@@ -13,6 +13,11 @@ use crate::driver::HipStream;
 pub mod result;
 pub mod sys;
 
+/// Re-exported sys enums that callers need to construct descriptors and
+/// matrix layouts. Lets downstream code use `rocmrc::hipblaslt::hipDataType`
+/// (etc.) instead of reaching into the generated `sys::` module.
+pub use sys::{hipDataType, hipblasComputeType_t, hipblasLtEpilogue_t, hipblasOperation_t};
+
 #[derive(Debug, thiserror::Error)]
 pub enum HipBlasLtError {
     #[error("hipBLASLt error: {0:?}")]

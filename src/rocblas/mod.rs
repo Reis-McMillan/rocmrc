@@ -12,6 +12,11 @@ use crate::driver::HipStream;
 pub mod result;
 pub mod sys;
 
+/// Re-exported sys enum that callers commonly pass into the safe wrappers.
+/// Lets downstream code use `rocmrc::rocblas::rocblas_pointer_mode` instead of
+/// reaching into the generated `sys::` module.
+pub use sys::rocblas_pointer_mode;
+
 #[derive(Debug, thiserror::Error)]
 pub enum RocblasError {
     #[error("rocBLAS error: {0:?}")]

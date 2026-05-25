@@ -1,15 +1,15 @@
 //! End-to-end f32 GEMM via `rocblas`, plus a quick L1 (axpy/scal/nrm2/dot/copy)
 //! round trip to exercise the trait surface.
 //!
-//! Run:
-//!   ROCM_PATH=/opt/rocm cargo run --features rocm-07021,rocblas --example sgemm
+//! Run (pick any rocm-XYYYY feature matching the installed ROCm version):
+//!   ROCM_PATH=/opt/rocm cargo run --features rocblas,rocm-07021 --example sgemm
 
 use rocmrc::driver::{HipContext, HipSlice};
-use rocmrc::rocblas::{
-    Axpy, AxpyConfig, Copy as _, CopyConfig, Dot, DotConfig, Gemm, GemmConfig, Nrm2, Nrm2Config,
-    Operation, RocblasHandle, Scal, ScalConfig,
-};
 use rocmrc::driver::result as drv;
+use rocmrc::rocblas::{
+    Axpy, AxpyConfig, Copy as BlasCopy, CopyConfig, Dot, DotConfig, Gemm, GemmConfig, Nrm2,
+    Nrm2Config, Operation, RocblasHandle, Scal, ScalConfig, rocblas_pointer_mode,
+};
 
 fn main() {
     let arch = std::env::var("ROCMRC_GFX").unwrap_or_else(|_| "gfx1102".to_string());
@@ -127,33 +127,33 @@ fn main() {
     }
 
     // copy: z := y
+    // Copy/Dot/Nrm2 configs don't carry a `T`, so the trait dispatch needs an
+    // explicit type via UFCS. (scal/axpy can infer T from `alpha: T` in cfg.)
     unsafe {
-        handle
-            .copy(
-                CopyConfig { n: M as i32, incx: 1, incy: 1 },
-                d_y.device_ptr(),
-                d_z.device_ptr(),
-            )
-            .expect("copy");
+        BlasCopy::<f32>::copy(
+            &*handle,
+            CopyConfig { n: M as i32, incx: 1, incy: 1 },
+            d_y.device_ptr(),
+            d_z.device_ptr(),
+        )
+        .expect("copy");
     }
 
     // Switch to device pointer mode for the reduction; result lands in d_scratch.
     handle
-        .set_pointer_mode(
-            rocmrc::rocblas::sys::rocblas_pointer_mode::rocblas_pointer_mode_device,
-        )
+        .set_pointer_mode(rocblas_pointer_mode::rocblas_pointer_mode_device)
         .expect("ptr mode");
 
     // dot: <x, z>
     unsafe {
-        handle
-            .dot(
-                DotConfig { n: M as i32, incx: 1, incy: 1 },
-                d_x.device_ptr(),
-                d_z.device_ptr(),
-                d_scratch.device_ptr(),
-            )
-            .expect("dot");
+        Dot::<f32>::dot(
+            &*handle,
+            DotConfig { n: M as i32, incx: 1, incy: 1 },
+            d_x.device_ptr(),
+            d_z.device_ptr(),
+            d_scratch.device_ptr(),
+        )
+        .expect("dot");
     }
 
     let mut dot_buf = [0f32];
@@ -169,13 +169,13 @@ fn main() {
 
     // nrm2(x)
     unsafe {
-        handle
-            .nrm2(
-                Nrm2Config { n: M as i32, incx: 1 },
-                d_x.device_ptr(),
-                d_scratch.device_ptr(),
-            )
-            .expect("nrm2");
+        Nrm2::<f32>::nrm2(
+            &*handle,
+            Nrm2Config { n: M as i32, incx: 1 },
+            d_x.device_ptr(),
+            d_scratch.device_ptr(),
+        )
+        .expect("nrm2");
     }
     let mut nrm_buf = [0f32];
     unsafe {
