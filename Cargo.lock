@@ -97,7 +97,10 @@ dependencies = [
  "env_logger",
  "indicatif",
  "log",
+ "proc-macro2",
+ "quote",
  "rayon",
+ "syn",
 ]
 
 [[package]]
@@ -539,6 +542,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "half",
+ "libloading",
  "thiserror",
 ]
 

@@ -81,19 +81,19 @@ impl ModuleConfig {
         }
     }
 
-    /// Run bindgen against headers in `<rocm_path>/include` for this module
-    /// and write the result to `<crate_root>/src/<rocmrc_name>/sys/linked/sys_<version>.rs`.
+    /// Run bindgen against headers in `<rocm_path>/include` for this module.
+    ///
+    /// Reads the hand-written wrapper at
+    ///   `<workspace_root>/src/<rocmrc_name>/sys/wrapper.h`
+    /// and writes the generated bindings to
+    ///   `<generator_root>/out/<rocmrc_name>/sys/linked/sys_<version>.rs`
+    /// (gitignored). `merge.rs` then consumes that file.
     pub fn run_bindgen(&self, rocm_path: &Path, version: Version) -> Result<()> {
-        let crate_root = crate_root();
-        let module_sys = crate_root
+        let wrapper_h = workspace_root()
             .join("src")
             .join(self.rocmrc_name)
-            .join("sys");
-        let linked_dir = module_sys.join("linked");
-        fs::create_dir_all(&linked_dir)
-            .with_context(|| format!("creating {}", linked_dir.display()))?;
-
-        let wrapper_h = module_sys.join("wrapper.h");
+            .join("sys")
+            .join("wrapper.h");
         if !wrapper_h.exists() {
             anyhow::bail!(
                 "missing wrapper.h for {}: expected at {}",
@@ -101,6 +101,14 @@ impl ModuleConfig {
                 wrapper_h.display()
             );
         }
+
+        let linked_dir = generator_root()
+            .join("out")
+            .join(self.rocmrc_name)
+            .join("sys")
+            .join("linked");
+        fs::create_dir_all(&linked_dir)
+            .with_context(|| format!("creating {}", linked_dir.display()))?;
 
         let resource_dir = clang_resource_dir(rocm_path)?;
         let include_root = rocm_path.join("include");
@@ -172,13 +180,20 @@ impl ModuleConfig {
     }
 }
 
-/// Locate the path of the rocmrc crate root (parent of this tool's manifest dir).
-fn crate_root() -> PathBuf {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    PathBuf::from(manifest_dir)
+/// The rocmrc crate root (parent of this tool's manifest dir). Where the
+/// hand-written `wrapper.h` files live, and where the merged `mod.rs` files
+/// land after `merge.rs` runs.
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("bindings_generator manifest must have a parent")
         .to_path_buf()
+}
+
+/// This tool's own manifest dir. Holds the gitignored `out/` tree where
+/// bindgen drops per-version files for `merge.rs` to consume.
+fn generator_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 /// `<rocm_path>/llvm/bin/clang --print-resource-dir`
@@ -241,9 +256,9 @@ pub fn create_modules() -> Vec<ModuleConfig> {
         ModuleConfig {
             rocmrc_name: "hipblaslt",
             allowlist: Filters {
-                functions: vec!["^hipblas(Lt)?.*"],
+                functions: vec!["^hipblasLt.*"],
                 types: vec!["^hipblas(Lt)?.*"],
-                vars: vec!["^HIPBLAS.*"],
+                vars: vec!["^HIPBLASLT?_.*"],
             },
             // hipblaslt.h transitively #include's C++ headers (e.g. <memory>),
             // so the wrapper must be parsed as C++.

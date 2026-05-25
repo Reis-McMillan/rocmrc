@@ -25,3 +25,41 @@ pub use rocblas::{
 pub use hipblaslt::{
     HipBlasLt, HipBlasLtError, MatmulDesc, MatmulHeuristic, MatmulPref, MatrixLayout,
 };
+
+#[cfg(feature = "dynamic-loading")]
+pub fn get_lib_name_candidates(lib_name: &str) -> Vec<String> {
+    use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};
+
+    let major = env!("ROCM_MAJOR_VERSION");
+    let minor = env!("ROCM_MINOR_VERSION");
+
+    let rocm_path =
+        std::env::var("ROCM_PATH").unwrap_or_else(|_| "/opt/rocm".to_string());
+
+    let stems = [
+        // Bare soname; resolved via LD_LIBRARY_PATH / ldconfig.
+        format!("{DLL_PREFIX}{lib_name}{DLL_SUFFIX}"),
+        // Major-versioned soname (e.g. librocblas.so.4).
+        format!("{DLL_PREFIX}{lib_name}{DLL_SUFFIX}.{major}"),
+        // Common alternative majors to try as fallbacks.
+        format!("{DLL_PREFIX}{lib_name}{DLL_SUFFIX}.0"),
+        format!("{DLL_PREFIX}{lib_name}{DLL_SUFFIX}.1"),
+        // Exact patch soname.
+        format!("{DLL_PREFIX}{lib_name}{DLL_SUFFIX}.{major}.{minor}"),
+    ];
+
+    let mut out = Vec::with_capacity(stems.len() * 2);
+    for stem in &stems {
+        out.push(stem.clone());                    // search via loader
+        out.push(format!("{rocm_path}/lib/{stem}")); // explicit ROCm install
+    }
+    out
+}
+
+#[cfg(feature = "dynamic-loading")]
+pub fn panic_no_lib_found(name: &str, tried: &[String]) -> ! {
+    panic!(
+        "could not load dynamic library {name}; tried {} candidates: {tried:?}",
+        tried.len()
+    );
+}

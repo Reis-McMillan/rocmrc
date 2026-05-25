@@ -16,19 +16,24 @@ hipblaslt = []
 # ROCm version axis. Consumers pick exactly one to select which committed
 # binding (under src/<mod>/sys/linked/sys_<ver>.rs) the merged sys.rs includes.
 # Versions added on demand as `bindings_generator` is run on a matching install.
-"rocm-06000" = []
-"rocm-06010" = []
-"rocm-06020" = []
-"rocm-06030" = []
-"rocm-06040" = []
-"rocm-07000" = []
-"rocm-07010" = []
+"rocm-06002" = []
+"rocm-06015" = []
+"rocm-06024" = []
+"rocm-06033" = []
+"rocm-06043" = []
+"rocm-07002" = []
+"rocm-07011" = []
 "rocm-07020" = []
 "rocm-07021" = []
+"rocm-07022" = []
+"rocm-07023" = []
+
+dynamic-loading = ["dep:libloading"]
 
 [dependencies]
 thiserror = "1.0"
 half = "2"
+libloading = { version = "0.8", optional = true }
 
 [dev-dependencies]
 bytemuck = "1.16"

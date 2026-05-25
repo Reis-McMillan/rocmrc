@@ -1,3 +1,7 @@
 .claude
 
 /target
+bindings_generator/out/
+
+# CARGO_HOME used by the rocmrc-gen docker image when run with --user $(id -u).
+.cargo-container/
