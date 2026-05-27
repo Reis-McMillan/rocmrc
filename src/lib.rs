@@ -13,6 +13,7 @@ pub mod rocblas;
 pub mod hipblaslt;
 
 pub use driver::{DevicePtr, DriverError, HipContext, HipFunction, HipModule, HipSlice, HipStream};
+pub use driver::result::HipResult;
 pub use hiprtc::{HiprtcError, Hsaco};
 
 #[cfg(feature = "rocblas")]

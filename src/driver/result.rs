@@ -1,14 +1,29 @@
 //! Thin `Result`-wrapped FFI. Mirror layout: `cudarc::driver::result`.
 
-use super::{DriverError, sys};
+pub use super::{DriverError, sys};
 use std::ffi::{CString, c_void};
 
 #[inline]
-fn check(r: sys::hipError_t) -> Result<(), DriverError> {
+pub(crate) fn check(r: sys::hipError_t) -> Result<(), DriverError> {
     if r == sys::hipError_t::hipSuccess {
         Ok(())
     } else {
         Err(DriverError::Hip(r))
+    }
+}
+
+/// Promote a raw FFI status to a `Result`. Mirrors cudarc's `.result()?`
+/// idiom so call sites copied from `luminal_cuda_lite` can write
+/// `unsafe { sys::hipFoo(...) }.result()?` unchanged.
+pub trait HipResult {
+    type Err;
+    fn result(self) -> std::result::Result<(), Self::Err>;
+}
+
+impl HipResult for sys::hipError_t {
+    type Err = DriverError;
+    fn result(self) -> Result<(), DriverError> {
+        check(self)
     }
 }
 
@@ -98,6 +113,32 @@ pub unsafe fn memcpy_dtoh_async(
     }
 }
 
+pub unsafe fn memset_d8_async(
+    ptr: u64, value: u8, bytes: usize, stream: sys::hipStream_t,
+) -> Result<(), DriverError> {
+    unsafe { check(sys::hipMemsetD8Async(ptr as *mut _, value, bytes, stream)) }
+}
+
+/// # Safety
+/// Both `dst` and `src` must point to at least `bytes` of device memory in the
+/// same context, reachable through `stream`.
+pub unsafe fn memcpy_dtod_async(
+    dst: u64,
+    src: u64,
+    bytes: usize,
+    stream: sys::hipStream_t,
+) -> Result<(), DriverError> {
+    unsafe {
+        check(sys::hipMemcpyDtoDAsync(
+            dst as sys::hipDeviceptr_t,
+            src as sys::hipDeviceptr_t,
+            bytes,
+            stream,
+        ))
+    }
+}
+
+
 pub fn module_load_data(image: &[u8]) -> Result<sys::hipModule_t, DriverError> {
     let mut m: sys::hipModule_t = std::ptr::null_mut();
     unsafe { check(sys::hipModuleLoadData(&mut m, image.as_ptr() as *const c_void))? };
@@ -144,4 +185,18 @@ pub unsafe fn module_launch_kernel(
             std::ptr::null_mut(),
         ))
     }
+}
+
+pub fn device_gcn_arch_name(ordinal: i32) -> Result<String, DriverError> {
+    let mut props: sys::hipDeviceProp_tR0600 = unsafe { std::mem::zeroed() };
+    unsafe { check(sys::hipGetDevicePropertiesR0600(&mut props, ordinal))? };
+    let cstr = unsafe { std::ffi::CStr::from_ptr(props.gcnArchName.as_ptr()) };
+    let raw = cstr.to_string_lossy().into_owned();
+    // gcnArchName can carry feature suffixes like "gfx1100:sramecc-:xnack-"
+    // that hipRTC won't accept. Strip at the first ':'.
+    Ok(raw.split(':').next().unwrap_or(&raw).to_string())
+}
+
+pub fn set_device_flags(flags: core::ffi::c_uint) -> Result<(), DriverError> {
+    unsafe { check(sys::hipSetDeviceFlags(flags)) }
 }

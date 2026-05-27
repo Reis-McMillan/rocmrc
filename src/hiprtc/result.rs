@@ -1,6 +1,7 @@
 //! Thin `Result`-wrapped hipRTC FFI. Mirror layout: `cudarc::nvrtc::result`.
 
-use super::{HiprtcError, sys};
+pub use super::{HiprtcError, sys};
+use crate::driver::result::HipResult;
 use std::ffi::CString;
 
 #[inline]
@@ -9,6 +10,13 @@ fn check(r: sys::hiprtcResult) -> Result<(), HiprtcError> {
         Ok(())
     } else {
         Err(HiprtcError::Hiprtc(r))
+    }
+}
+
+impl HipResult for sys::hiprtcResult {
+    type Err = HiprtcError;
+    fn result(self) -> Result<(), HiprtcError> {
+        check(self)
     }
 }
 

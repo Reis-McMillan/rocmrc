@@ -2,7 +2,8 @@
 
 use std::ffi::c_void;
 
-use super::{HipBlasLtError, sys};
+pub use super::{HipBlasLtError, sys};
+use crate::driver::result::HipResult;
 
 #[inline]
 fn check(r: sys::hipblasStatus_t) -> Result<(), HipBlasLtError> {
@@ -10,6 +11,13 @@ fn check(r: sys::hipblasStatus_t) -> Result<(), HipBlasLtError> {
         Ok(())
     } else {
         Err(HipBlasLtError::HipBlasLt(r))
+    }
+}
+
+impl HipResult for sys::hipblasStatus_t {
+    type Err = HipBlasLtError;
+    fn result(self) -> Result<(), HipBlasLtError> {
+        check(self)
     }
 }
 

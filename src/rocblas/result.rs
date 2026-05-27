@@ -2,7 +2,8 @@
 
 use std::ffi::c_void;
 
-use super::{RocblasError, sys};
+pub use super::{RocblasError, sys};
+use crate::driver::result::HipResult;
 
 #[inline]
 fn check(r: sys::rocblas_status) -> Result<(), RocblasError> {
@@ -10,6 +11,13 @@ fn check(r: sys::rocblas_status) -> Result<(), RocblasError> {
         Ok(())
     } else {
         Err(RocblasError::Rocblas(r))
+    }
+}
+
+impl HipResult for sys::rocblas_status {
+    type Err = RocblasError;
+    fn result(self) -> Result<(), RocblasError> {
+        check(self)
     }
 }
 

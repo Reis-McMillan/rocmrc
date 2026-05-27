@@ -75,11 +75,23 @@ impl RocblasHandle {
     pub fn rocblas_handle(&self) -> sys::rocblas_handle {
         self.raw
     }
+
+    /// Alias for [`Self::rocblas_handle`] matching cudarc's `.handle()`
+    /// naming so call sites copied from `luminal_cuda_lite` compile unchanged.
+    pub fn handle(&self) -> sys::rocblas_handle {
+        self.raw
+    }
 }
 
 impl Drop for RocblasHandle {
     fn drop(&mut self) {
         let _ = result::destroy_handle(self.raw);
+    }
+}
+
+impl std::fmt::Debug for RocblasHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RocblasHandle").field("raw", &self.raw).finish()
     }
 }
 

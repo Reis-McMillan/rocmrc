@@ -28,18 +28,37 @@ pub enum HipBlasLtError {
 
 /// Top-level hipBLASLt handle. hipBLASLt handles are thread-safe per upstream
 /// docs.
+///
+/// Bound to a single [`HipStream`] at construction (mirroring cudarc's
+/// `CudaBlasLT::new(stream)` shape), so [`matmul`](Self::matmul) doesn't need
+/// a per-call stream argument. If you need to issue matmuls on multiple
+/// streams, create one `HipBlasLt` per stream — handles are cheap.
 pub struct HipBlasLt {
     raw: sys::hipblasLtHandle_t,
+    stream: Arc<HipStream>,
 }
 
 impl HipBlasLt {
-    pub fn new() -> Result<Arc<Self>, HipBlasLtError> {
+    pub fn new(stream: Arc<HipStream>) -> Result<Arc<Self>, HipBlasLtError> {
         let raw = result::create()?;
-        Ok(Arc::new(Self { raw }))
+        Ok(Arc::new(Self { raw, stream }))
     }
 
     pub fn hipblaslt_handle(&self) -> sys::hipblasLtHandle_t {
         self.raw
+    }
+
+    /// Alias for [`Self::hipblaslt_handle`] matching cudarc's `.handle()`
+    /// naming so call sites copied from `luminal_cuda_lite` compile unchanged.
+    pub fn handle(&self) -> sys::hipblasLtHandle_t {
+        self.raw
+    }
+
+    /// The stream this handle was bound to at construction. Exposed so
+    /// callers can synchronize or hand the raw `hipStream_t` to vendor
+    /// libraries.
+    pub fn stream(&self) -> &Arc<HipStream> {
+        &self.stream
     }
 }
 
@@ -51,6 +70,12 @@ impl Drop for HipBlasLt {
 
 unsafe impl Send for HipBlasLt {}
 unsafe impl Sync for HipBlasLt {}
+
+impl std::fmt::Debug for HipBlasLt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HipBlasLt").field("raw", &self.raw).finish()
+    }
+}
 
 // ---------------- matrix layout ----------------
 
@@ -304,7 +329,6 @@ impl HipBlasLt {
         heuristic: &MatmulHeuristic,
         workspace: u64,
         workspace_size: usize,
-        stream: &HipStream,
     ) -> Result<(), HipBlasLtError> {
         unsafe {
             result::matmul(
@@ -325,7 +349,7 @@ impl HipBlasLt {
                 workspace_size,
                 // driver::sys and hipblaslt::sys each redeclare ihipStream_t;
                 // rustc treats them as distinct nominal types. Cast at the bridge.
-                stream.hip_stream().cast(),
+                self.stream.hip_stream().cast(),
             )
         }
     }
