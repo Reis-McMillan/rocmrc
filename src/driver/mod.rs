@@ -3,7 +3,10 @@
 //! Layout mirrors `cudarc::driver` so call sites in `luminal_rocm_lite`
 //! can be near-identical to the existing CUDA paths.
 
-use std::{marker::PhantomData, sync::{Arc, Weak}};
+use std::{
+    marker::PhantomData,
+    sync::{Arc, Mutex, Weak},
+};
 
 pub mod result;
 pub mod sys;
@@ -37,19 +40,25 @@ impl DeviceFlags {
     }
 }
 
-/// A HIP device + its default stream. Analogue of `cudarc::driver::CudaContext`.
+/// A HIP device + a cached default stream. Analogue of
+/// `cudarc::driver::CudaContext`.
 ///
-/// HIP uses implicit per-thread contexts (like CUDA's primary context), so
-/// this struct just bundles `(device_ordinal, default_stream, arch)`.
+/// Owns no streams strongly — streams hold an `Arc<HipContext>` back to here.
+/// The `default_stream` field is a lazily-created weakly-cached pointer: each
+/// call to [`Self::default_stream`] upgrades it if still alive, otherwise
+/// creates a fresh stream. This means a `HipContext` is alive iff at least
+/// one strong reference exists somewhere (user code, or transitively via a
+/// `HipStream`), and shutting down the context releases the GPU resources.
 pub struct HipContext {
     ordinal: i32,
-    default_stream: Arc<HipStream>,
+    default_stream: Mutex<Weak<HipStream>>,
     gfx_arch: String,
     flags: DeviceFlags,
 }
 
 impl HipContext {
-    /// Bind to the given device and create a default stream.
+    /// Bind to the given device. The default stream is created lazily on
+    /// first access via [`Self::default_stream`].
     pub fn new(ordinal: i32) -> Result<Arc<Self>, DriverError> {
         Self::new_with_flags(ordinal, DeviceFlags::BlockingSync)
     }
@@ -58,18 +67,12 @@ impl HipContext {
         result::set_device(ordinal)?;
         result::set_device_flags(flags.to_raw())?;   // MUST be before stream_create
         let gfx_arch = result::device_gcn_arch_name(ordinal)?;
-        // Fallible resource (stream) before the cyclic construction so we can
-        // bubble errors. The Arc::new_cyclic closure is infallible.
-        let raw_stream = result::stream_create()?;
-        let ctx = Arc::new_cyclic(|weak_ctx: &Weak<HipContext>| {
-            let stream = Arc::new(HipStream {
-                raw: raw_stream,
-                device_ordinal: ordinal,
-                ctx: weak_ctx.clone(),
-            });
-            HipContext { ordinal, default_stream: stream, gfx_arch, flags }
-        });
-        Ok(ctx)
+        Ok(Arc::new(Self {
+            ordinal,
+            default_stream: Mutex::new(Weak::new()),
+            gfx_arch,
+            flags,
+        }))
     }
 
     /// Parse `gfx_arch` into a `(major, minor)` tuple mirroring cudarc's
@@ -103,8 +106,28 @@ impl HipContext {
         self.ordinal
     }
 
-    pub fn default_stream(&self) -> Arc<HipStream> {
-        self.default_stream.clone()
+    /// Returns the cached default stream, creating it on first call.
+    /// Subsequent calls return the same `Arc<HipStream>` as long as at least
+    /// one caller still holds the previous handle. Once all callers drop their
+    /// `Arc<HipStream>`s, the next call creates a fresh stream.
+    pub fn default_stream(self: &Arc<Self>) -> Arc<HipStream> {
+        let mut guard = self.default_stream.lock().unwrap();
+        if let Some(s) = guard.upgrade() {
+            return s;
+        }
+        // First access on this context (or all previous handles dropped).
+        // Apply device + flags before stream_create — required by HIP if the
+        // calling thread hasn't initialized this device yet.
+        let _ = result::set_device(self.ordinal);
+        let _ = result::set_device_flags(self.flags.to_raw());
+        let raw = result::stream_create().expect("hipStreamCreate failed");
+        let stream = Arc::new(HipStream {
+            raw,
+            device_ordinal: self.ordinal,
+            ctx: self.clone(),
+        });
+        *guard = Arc::downgrade(&stream);
+        stream
     }
 
     pub fn gfx_arch(&self) -> &str {
@@ -119,7 +142,7 @@ impl HipContext {
     /// Allocate a typed device buffer of `len` elements, bound to the
     /// default stream for cleanup.
     pub fn alloc<T>(self: &Arc<Self>, len: usize) -> Result<HipSlice<T>, DriverError> {
-        HipSlice::alloc(self.default_stream.clone(), len)
+        HipSlice::alloc(self.default_stream(), len)
     }
 
     pub fn bind_to_thread(&self) -> Result<(), DriverError> {
@@ -143,14 +166,15 @@ impl HipContext {
 
 /// A HIP stream. Analogue of `cudarc::driver::CudaStream`.
 ///
-/// Holds a `Weak<HipContext>` back-reference so `context()` can return an
-/// `Arc<HipContext>`. The owning `HipContext` keeps an `Arc<HipStream>`
-/// for its default stream, so the Weak is what breaks the cycle.
+/// Holds a strong `Arc<HipContext>` back-reference. Any code holding an
+/// `Arc<HipStream>` keeps its `HipContext` alive transitively, which is the
+/// natural ownership direction for kernel-launch APIs that hand a stream
+/// around (the context only needs to live as long as the stream).
 pub struct HipStream {
     raw: sys::hipStream_t,
     #[allow(dead_code)]
     device_ordinal: i32,
-    ctx: Weak<HipContext>,
+    ctx: Arc<HipContext>,
 }
 
 impl HipStream {
@@ -164,12 +188,10 @@ impl HipStream {
         self.raw
     }
 
-    /// The `HipContext` that owns this stream. Panics if the context has
-    /// been dropped, which shouldn't happen since the context owns the
-    /// stream's `Arc` (so an `Arc<HipStream>` keeps the context alive
-    /// transitively in normal use).
+    /// The `HipContext` this stream was created under. Cloning an `Arc` is
+    /// cheap — this is the normal way to recover the context from a stream.
     pub fn context(&self) -> Arc<HipContext> {
-        self.ctx.upgrade().expect("HipContext dropped before HipStream")
+        self.ctx.clone()
     }
 
     pub fn alloc<T>(self: &Arc<Self>, len: usize) -> Result<HipSlice<T>, DriverError> {
