@@ -4,16 +4,14 @@
 //! Run (pick any rocm-XYYYY feature matching the installed ROCm version):
 //!   ROCM_PATH=/opt/rocm cargo run --features rocblas,rocm-07021 --example sgemm
 
-use rocmrc::driver::{HipContext, HipSlice};
-use rocmrc::driver::result as drv;
+use rocmrc::driver::HipContext;
 use rocmrc::rocblas::{
     Axpy, AxpyConfig, Copy as BlasCopy, CopyConfig, Dot, DotConfig, Gemm, GemmConfig, Nrm2,
     Nrm2Config, Operation, RocblasHandle, Scal, ScalConfig, rocblas_pointer_mode,
 };
 
 fn main() {
-    let arch = std::env::var("ROCMRC_GFX").unwrap_or_else(|_| "gfx1102".to_string());
-    let ctx = HipContext::new(0, &arch).expect("HipContext");
+    let ctx = HipContext::new(0).expect("HipContext");
     let stream = ctx.default_stream();
     println!("device  = {}", ctx.name().unwrap_or_else(|_| "<unknown>".into()));
 
@@ -24,24 +22,9 @@ fn main() {
     let a_host: Vec<f32> = (0..N * N).map(|i| (i % 7) as f32).collect();
     let b_host: Vec<f32> = (0..N * N).map(|i| (i % 5) as f32 - 2.0).collect();
 
-    let d_a: HipSlice<f32> = ctx.alloc(N * N).unwrap();
-    let d_b: HipSlice<f32> = ctx.alloc(N * N).unwrap();
-    let d_c: HipSlice<f32> = ctx.alloc(N * N).unwrap();
-
-    unsafe {
-        drv::memcpy_htod_async(
-            d_a.device_ptr(),
-            bytemuck::cast_slice(&a_host),
-            stream.hip_stream(),
-        )
-        .unwrap();
-        drv::memcpy_htod_async(
-            d_b.device_ptr(),
-            bytemuck::cast_slice(&b_host),
-            stream.hip_stream(),
-        )
-        .unwrap();
-    }
+    let d_a = stream.clone_htod(&a_host).unwrap();
+    let d_b = stream.clone_htod(&b_host).unwrap();
+    let d_c = ctx.alloc::<f32>(N * N).unwrap();
 
     let cfg = GemmConfig::<f32> {
         transa: Operation::None,
@@ -57,17 +40,16 @@ fn main() {
     };
     unsafe {
         handle
-            .gemm(cfg, d_a.device_ptr(), d_b.device_ptr(), d_c.device_ptr())
+            .gemm(
+                cfg,
+                d_a.device_ptr(&stream).0,
+                d_b.device_ptr(&stream).0,
+                d_c.device_ptr(&stream).0,
+            )
             .expect("sgemm");
     }
 
-    let mut c_bytes = vec![0u8; N * N * std::mem::size_of::<f32>()];
-    unsafe {
-        drv::memcpy_dtoh_async(&mut c_bytes, d_c.device_ptr(), stream.hip_stream()).unwrap();
-    }
-    stream.synchronize().expect("sync");
-
-    let c: &[f32] = bytemuck::cast_slice(&c_bytes);
+    let c = stream.clone_dtoh(&d_c).expect("dtoh");
     // Column-major CPU reference: C[i,j] = sum_k A[i,k] * B[k,j]
     let mut max_err = 0f32;
     for j in 0..N {
@@ -88,30 +70,18 @@ fn main() {
     let x_host: Vec<f32> = (0..M).map(|i| 0.001 * i as f32).collect();
     let y_host: Vec<f32> = (0..M).map(|i| 0.5 - 0.001 * i as f32).collect();
 
-    let d_x: HipSlice<f32> = ctx.alloc(M).unwrap();
-    let d_y: HipSlice<f32> = ctx.alloc(M).unwrap();
-    let d_z: HipSlice<f32> = ctx.alloc(M).unwrap(); // copy target
-    let d_scratch: HipSlice<f32> = ctx.alloc(1).unwrap(); // device-side reduction result
-
-    unsafe {
-        drv::memcpy_htod_async(
-            d_x.device_ptr(),
-            bytemuck::cast_slice(&x_host),
-            stream.hip_stream(),
-        )
-        .unwrap();
-        drv::memcpy_htod_async(
-            d_y.device_ptr(),
-            bytemuck::cast_slice(&y_host),
-            stream.hip_stream(),
-        )
-        .unwrap();
-    }
+    let d_x = stream.clone_htod(&x_host).unwrap();
+    let d_y = stream.clone_htod(&y_host).unwrap();
+    let d_z = ctx.alloc::<f32>(M).unwrap(); // copy target
+    let d_scratch = ctx.alloc::<f32>(1).unwrap(); // device-side reduction result
 
     // scal: x := 2*x
     unsafe {
         handle
-            .scal(ScalConfig { n: M as i32, alpha: 2.0f32, incx: 1 }, d_x.device_ptr())
+            .scal(
+                ScalConfig { n: M as i32, alpha: 2.0f32, incx: 1 },
+                d_x.device_ptr(&stream).0,
+            )
             .expect("scal");
     }
 
@@ -120,8 +90,8 @@ fn main() {
         handle
             .axpy(
                 AxpyConfig { n: M as i32, alpha: 3.0f32, incx: 1, incy: 1 },
-                d_x.device_ptr(),
-                d_y.device_ptr(),
+                d_x.device_ptr(&stream).0,
+                d_y.device_ptr(&stream).0,
             )
             .expect("axpy");
     }
@@ -133,8 +103,8 @@ fn main() {
         BlasCopy::<f32>::copy(
             &*handle,
             CopyConfig { n: M as i32, incx: 1, incy: 1 },
-            d_y.device_ptr(),
-            d_z.device_ptr(),
+            d_y.device_ptr(&stream).0,
+            d_z.device_ptr(&stream).0,
         )
         .expect("copy");
     }
@@ -149,44 +119,25 @@ fn main() {
         Dot::<f32>::dot(
             &*handle,
             DotConfig { n: M as i32, incx: 1, incy: 1 },
-            d_x.device_ptr(),
-            d_z.device_ptr(),
-            d_scratch.device_ptr(),
+            d_x.device_ptr(&stream).0,
+            d_z.device_ptr(&stream).0,
+            d_scratch.device_ptr(&stream).0,
         )
         .expect("dot");
     }
-
-    let mut dot_buf = [0f32];
-    unsafe {
-        drv::memcpy_dtoh_async(
-            bytemuck::cast_slice_mut(&mut dot_buf),
-            d_scratch.device_ptr(),
-            stream.hip_stream(),
-        )
-        .unwrap();
-    }
-    stream.synchronize().unwrap();
+    let dot_val = stream.clone_dtoh(&d_scratch).expect("dot dtoh")[0];
 
     // nrm2(x)
     unsafe {
         Nrm2::<f32>::nrm2(
             &*handle,
             Nrm2Config { n: M as i32, incx: 1 },
-            d_x.device_ptr(),
-            d_scratch.device_ptr(),
+            d_x.device_ptr(&stream).0,
+            d_scratch.device_ptr(&stream).0,
         )
         .expect("nrm2");
     }
-    let mut nrm_buf = [0f32];
-    unsafe {
-        drv::memcpy_dtoh_async(
-            bytemuck::cast_slice_mut(&mut nrm_buf),
-            d_scratch.device_ptr(),
-            stream.hip_stream(),
-        )
-        .unwrap();
-    }
-    stream.synchronize().unwrap();
+    let nrm_val = stream.clone_dtoh(&d_scratch).expect("nrm2 dtoh")[0];
 
     // CPU reference for the L1 chain.
     let x_ref: Vec<f32> = x_host.iter().map(|&v| 2.0 * v).collect();
@@ -199,10 +150,10 @@ fn main() {
     let dot_ref: f32 = x_ref.iter().zip(&y_ref).map(|(a, b)| a * b).sum();
     let nrm_ref: f32 = x_ref.iter().map(|v| v * v).sum::<f32>().sqrt();
 
-    let dot_err = (dot_buf[0] - dot_ref).abs() / dot_ref.abs().max(1e-6);
-    let nrm_err = (nrm_buf[0] - nrm_ref).abs() / nrm_ref.abs().max(1e-6);
-    println!("dot     = {} (ref {}), rel err {:.3e}", dot_buf[0], dot_ref, dot_err);
-    println!("nrm2(x) = {} (ref {}), rel err {:.3e}", nrm_buf[0], nrm_ref, nrm_err);
+    let dot_err = (dot_val - dot_ref).abs() / dot_ref.abs().max(1e-6);
+    let nrm_err = (nrm_val - nrm_ref).abs() / nrm_ref.abs().max(1e-6);
+    println!("dot     = {} (ref {}), rel err {:.3e}", dot_val, dot_ref, dot_err);
+    println!("nrm2(x) = {} (ref {}), rel err {:.3e}", nrm_val, nrm_ref, nrm_err);
     assert!(dot_err < 1e-4 && nrm_err < 1e-4, "L1 precision");
 
     println!("ok");

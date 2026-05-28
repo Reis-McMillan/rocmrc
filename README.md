@@ -40,7 +40,7 @@ void vec_add(float* out, const float* a, const float* b, int n) {
 }
 "#;
 
-let ctx = HipContext::new(0, "gfx1102")?;
+let ctx = HipContext::new(0)?;
 let (hsaco, _log) = rocmrc::hiprtc::compile(SRC, ctx.gfx_arch())?;
 let module = HipModule::from_hsaco(hsaco.as_bytes())?;
 let func = module.get_function("vec_add")?;
