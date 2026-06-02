@@ -22,3 +22,4 @@ pub use self::unified_memory::{
     HipUnifiedSlice, HipUnifiedView, HipUnifiedViewMut, MemAttachFlags,
 };
 pub use crate::hip::result::HipError;
+pub use crate::hip::result::stream::StreamKind;

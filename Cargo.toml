@@ -20,6 +20,12 @@ default = []
 rocblas = []
 hipblaslt = []
 
+# Optional `DeviceRepr` / `ValidAsZeroBits` impls for sub-32-bit float types.
+# `half` (f16/bf16) is an unconditional dep because `rocblas` uses it for
+# half-precision GEMM trait impls, so no `f16` feature gate is needed.
+f8 = ["dep:float8"]
+f4 = ["dep:float4"]
+
 # ROCm version axis. Consumers pick exactly one to select which committed
 # binding (under src/<mod>/sys/linked/sys_<ver>.rs) the merged sys.rs includes.
 # Versions added on demand as `bindings_generator` is run on a matching install.
@@ -40,6 +46,8 @@ dynamic-loading = ["dep:libloading"]
 [dependencies]
 thiserror = "1.0"
 half = "2"
+float8 = { version = "0.2", optional = true }
+float4 = { version = "0.1", optional = true }
 libloading = { version = "0.8", optional = true }
 
 [dev-dependencies]

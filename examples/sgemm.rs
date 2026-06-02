@@ -4,7 +4,7 @@
 //! Run (pick any rocm-XYYYY feature matching the installed ROCm version):
 //!   ROCM_PATH=/opt/rocm cargo run --features rocblas,rocm-07021 --example sgemm
 
-use rocmrc::driver::HipContext;
+use rocmrc::hip::HipContext;
 use rocmrc::rocblas::{
     Axpy, AxpyConfig, Copy as BlasCopy, CopyConfig, Dot, DotConfig, Gemm, GemmConfig, Nrm2,
     Nrm2Config, Operation, RocblasHandle, Scal, ScalConfig, rocblas_pointer_mode,

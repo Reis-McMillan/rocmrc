@@ -804,4 +804,98 @@ void boom() { assert(0); }
         // The assert fires asynchronously; sync should surface the error.
         assert!(stream.synchronize().is_err());
     }
+
+    // ----------------------------------------------------------------------
+    // Multi-GPU peer test — mirrors cudarc's `test_peer_memcpy_waits_for_src_stream`.
+    // Requires two distinct devices with peer access enabled. `#[ignore]`'d
+    // so it stays out of the default `cargo test` run (same as cudarc).
+    // ----------------------------------------------------------------------
+
+    const PEER_SLOW_KERNELS: &str = r#"
+extern "C" __global__
+void peer_slow_worker(const float* data, size_t len, float* out) {
+    float tmp = 0.0f;
+    for (size_t i = 0; i < 1000000; i++) {
+        tmp += data[i % len];
+    }
+    *out = tmp;
+}
+"#;
+
+    #[test]
+    #[ignore = "must be executed with multiple gpus"]
+    fn test_peer_memcpy_waits_for_src_stream() -> Result<(), HipError> {
+        use crate::hip::result;
+
+        let ctx1 = HipContext::new(0)?;
+        let ctx2 = HipContext::new(1)?;
+
+        // Enable bidirectional peer access. `enable_peer_access(peer_id, flags)`
+        // applies to whichever device is currently bound, so swap before each call.
+        ctx1.bind_to_thread()?;
+        result::device::enable_peer_access(1, 0)?;
+        ctx2.bind_to_thread()?;
+        result::device::enable_peer_access(0, 0)?;
+        ctx1.bind_to_thread()?;
+
+        let (hsaco, _log) =
+            crate::hiprtc::compile(PEER_SLOW_KERNELS, ctx1.gfx_arch()).expect("hipRTC compile");
+        let module = ctx1.load_module(hsaco)?;
+        let slow_worker = module.load_function("peer_slow_worker")?;
+
+        let stream1 = ctx1.new_stream()?;
+        let stream2 = ctx2.new_stream()?;
+
+        let n = 1000usize;
+
+        // src is 1.0s; slow_worker accumulates ~1e6 into tmp_out. tmp_out
+        // starts at 0.0, so reading dst should only see the accumulated
+        // sum if the peer copy correctly waits for stream1's kernel.
+        let src: HipSlice<f32> = stream1.clone_htod(&vec![1.0f32; n])?;
+        let mut tmp_out: HipSlice<f32> = stream1.alloc_zeros(1)?;
+        let mut dst: HipSlice<f32> = stream2.alloc_zeros(1)?;
+
+        stream1.synchronize()?;
+        stream2.synchronize()?;
+
+        // Queue the slow kernel on stream1 — keeps it busy while stream2 races below.
+        let numel = src.len();
+        unsafe {
+            stream1
+                .launch_builder(&slow_worker)
+                .arg(&src)
+                .arg(&numel)
+                .arg(&mut tmp_out)
+                .launch(LaunchConfig::for_num_elems(1))?;
+        }
+
+        // Peer-copy tmp_out (ctx1) → dst (ctx2) on stream2, without explicitly
+        // waiting for stream1. The launch builder's read/write event tracking
+        // should make this wait for the kernel.
+        stream2.memcpy_dtod(&tmp_out, &mut dst)?;
+
+        let result = stream2.clone_dtoh(&dst)?;
+        let truth = stream1.clone_dtoh(&tmp_out)?;
+
+        stream1.synchronize()?;
+        stream2.synchronize()?;
+
+        let result2 = stream2.clone_dtoh(&dst)?;
+
+        assert!(
+            result2 == truth,
+            "peer copy might be broken?; result={} truth={}",
+            result2[0],
+            truth[0],
+        );
+
+        assert!(
+            result == truth,
+            "peer copy read from pre-kernel data; result={} truth={}",
+            result[0],
+            truth[0],
+        );
+
+        Ok(())
+    }
 }

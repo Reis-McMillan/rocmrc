@@ -3,7 +3,7 @@
 use std::ffi::c_void;
 
 pub use super::{HipBlasLtError, sys};
-use crate::driver::result::HipResult;
+use crate::hip::result::HipResult;
 
 #[inline]
 fn check(r: sys::hipblasStatus_t) -> Result<(), HipBlasLtError> {

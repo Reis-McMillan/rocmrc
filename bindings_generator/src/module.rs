@@ -14,7 +14,7 @@ use crate::version::Version;
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct ModuleConfig {
-    /// Module directory under `src/` (e.g. `"driver"`, `"hiprtc"`, `"rocblas"`, `"hipblaslt"`).
+    /// Module directory under `src/` (e.g. `"hip"`, `"hiprtc"`, `"rocblas"`, `"hipblaslt"`).
     pub rocmrc_name: &'static str,
     /// Subdirs of `<rocm_path>/include` that bindgen should add to `-I`.
     /// Most modules just need `""`. Empty string = the include root itself.
@@ -222,7 +222,7 @@ fn clang_resource_dir(rocm_path: &Path) -> Result<PathBuf> {
 pub fn create_modules() -> Vec<ModuleConfig> {
     vec![
         ModuleConfig {
-            rocmrc_name: "driver",
+            rocmrc_name: "hip",
             allowlist: Filters {
                 functions: vec!["^hip.*"],
                 types: vec!["^hip.*", "^HIP.*"],
@@ -239,7 +239,7 @@ pub fn create_modules() -> Vec<ModuleConfig> {
                 vars: vec!["^HIPRTC.*"],
             },
             libs: vec!["hiprtc"],
-            module_dependencies: vec!["driver"],
+            module_dependencies: vec!["hip"],
             ..Default::default()
         },
         ModuleConfig {
@@ -250,7 +250,7 @@ pub fn create_modules() -> Vec<ModuleConfig> {
                 vars: vec!["^(rocblas|ROCBLAS)_.*"],
             },
             libs: vec!["rocblas"],
-            module_dependencies: vec!["driver"],
+            module_dependencies: vec!["hip"],
             ..Default::default()
         },
         ModuleConfig {
@@ -264,7 +264,7 @@ pub fn create_modules() -> Vec<ModuleConfig> {
             // so the wrapper must be parsed as C++.
             clang_args: vec!["-x", "c++"],
             libs: vec!["hipblaslt"],
-            module_dependencies: vec!["driver"],
+            module_dependencies: vec!["hip"],
             ..Default::default()
         },
     ]

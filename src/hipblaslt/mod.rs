@@ -8,7 +8,7 @@
 
 use std::{ffi::c_void, sync::Arc};
 
-use crate::driver::HipStream;
+use crate::hip::HipStream;
 
 pub mod result;
 pub mod sys;
@@ -347,7 +347,7 @@ impl HipBlasLt {
                 heuristic.algo(),
                 workspace,
                 workspace_size,
-                // driver::sys and hipblaslt::sys each redeclare ihipStream_t;
+                // hip::sys and hipblaslt::sys each redeclare ihipStream_t;
                 // rustc treats them as distinct nominal types. Cast at the bridge.
                 self.stream.hip_stream().cast(),
             )

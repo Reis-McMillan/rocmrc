@@ -3,7 +3,7 @@
 use std::ffi::c_void;
 
 pub use super::{RocblasError, sys};
-use crate::driver::result::HipResult;
+use crate::hip::result::HipResult;
 
 #[inline]
 fn check(r: sys::rocblas_status) -> Result<(), RocblasError> {

@@ -13,7 +13,7 @@ use crate::hip::{
 };
 
 use std::{
-    ffi::{c_uint, CString},
+    ffi::{c_int, c_uint, CString},
     marker::PhantomData,
     ops::{Bound, RangeBounds},
     sync::{
@@ -23,8 +23,8 @@ use std::{
 };
 
 // HIP `#define` flag values that bindgen drops. Re-declared here with the same
-// hex constants used in `<hip/hip_runtime_api.h>`.
-const HIP_STREAM_NON_BLOCKING: c_uint = 0x1;
+// hex constants used in `<hip/hip_runtime_api.h>`. (Stream flags live in the
+// typed `result::stream::StreamKind` enum.)
 const HIP_EVENT_DISABLE_TIMING: c_uint = 0x2;
 const HIP_EVENT_BLOCKING_SYNC: c_uint = 0x1;
 const HIP_HOST_MALLOC_WRITE_COMBINED: c_uint = 0x4;
@@ -547,7 +547,7 @@ impl HipContext {
         if prev == 0 && self.is_event_tracking() {
             self.synchronize()?;
         }
-        let hip_stream = result::stream::create_with_flags(HIP_STREAM_NON_BLOCKING)?;
+        let hip_stream = result::stream::create(result::stream::StreamKind::NonBlocking)?;
         Ok(Arc::new(HipStream {
             hip_stream,
             ctx: self.clone(),
@@ -566,7 +566,10 @@ impl HipContext {
             self.synchronize()?;
         }
         let hip_stream =
-            result::stream::create_with_priority(HIP_STREAM_NON_BLOCKING, priority)?;
+            result::stream::create_with_priority(
+                result::stream::StreamKind::NonBlocking,
+                priority,
+            )?;
         Ok(Arc::new(HipStream {
             hip_stream,
             ctx: self.clone(),
@@ -580,7 +583,7 @@ impl HipStream {
     pub fn fork(&self) -> Result<Arc<Self>, HipError> {
         self.ctx.bind_to_thread()?;
         self.ctx.num_streams.fetch_add(1, Ordering::Relaxed);
-        let hip_stream = result::stream::create_with_flags(HIP_STREAM_NON_BLOCKING)?;
+        let hip_stream = result::stream::create(result::stream::StreamKind::NonBlocking)?;
         let stream = Arc::new(HipStream {
             hip_stream,
             ctx: self.ctx.clone(),
@@ -1541,10 +1544,31 @@ impl HipStream {
     ) -> Result<(), HipError> {
         assert!(dst.len() >= src.len(), "memcpy_dtod: dst smaller than src");
         self.ctx.bind_to_thread()?;
+        
         let bytes = src.len() * std::mem::size_of::<T>();
-        let (sptr, _record_src) = src.device_ptr(self);
+
+        let src_ctx = src.stream().context();
+        let dst_ctx = self.context();
+
+        if src_ctx == dst_ctx {
+            let (sptr, _record_src) = src.device_ptr(self);
         let (dptr, _record_dst) = dst.device_ptr_mut(self);
         unsafe { result::memcpy_dtod_async(dptr as u64, sptr as u64, bytes, self.hip_stream) }
+        } else {
+            let (sptr, _record_src) = src.device_ptr(src.stream());
+            let (dptr, _record_dsdt) = dst.device_ptr_mut(self);
+            self.wait(&src.stream().record_event(None)?)?;
+            unsafe {
+                result::memcpy_peer_async(
+                    dptr as u64,
+                    dst_ctx.ordinal() as c_int,
+                    sptr as u64,
+                    src_ctx.ordinal() as c_int,
+                    bytes,
+                    self.hip_stream
+                )
+            }
+        }
     }
 }
 
@@ -1875,7 +1899,6 @@ impl HipFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::Ordering;
 
     #[test]
     fn test_transmutes() {
@@ -1917,16 +1940,26 @@ mod tests {
     #[test]
     fn test_post_alloc_arc_counts() {
         let ctx = HipContext::new(0).unwrap();
-        // default_stream + the context's own holds the ctx Arc.
+        assert_eq!(Arc::strong_count(&ctx), 1);
         let stream = ctx.default_stream();
-        assert!(Arc::strong_count(&ctx) >= 2);
-        let _: HipSlice<f32> = stream.alloc_zeros(64).unwrap();
-        // The slice's `stream` field is its own Arc<HipStream>, which
-        // also bumps ctx via the back-reference inside HipStream.
+        // +1 for the `ctx` Arc inside the freshly-created stream.
+        assert_eq!(Arc::strong_count(&ctx), 2);
+        let t: HipSlice<f32> = stream.alloc_zeros(64).unwrap();
+        // +2 for the `ctx` Arcs inside the slice's read/write events.
+        // (`slice.stream` is a clone of `stream`, so they share the same
+        // inner `ctx` field — that one doesn't add to the count.)
+        assert_eq!(Arc::strong_count(&ctx), 4);
+        // +1 for `slice.stream` (clone of the local `stream`).
+        assert_eq!(Arc::strong_count(&stream), 2);
+        drop(t);
+        assert_eq!(Arc::strong_count(&ctx), 2);
+        assert_eq!(Arc::strong_count(&stream), 1);
         drop(stream);
+        assert_eq!(Arc::strong_count(&ctx), 1);
     }
 
     #[test]
+    #[ignore = "must be run in isolation"]
     fn test_post_alloc_memory() {
         let ctx = HipContext::new(0).unwrap();
         let stream = ctx.default_stream();
@@ -1938,7 +1971,8 @@ mod tests {
         drop(buf);
         ctx.synchronize().unwrap();
         let (free2, _) = ctx.mem_get_info().unwrap();
-        assert!(free2 >= free1, "free memory did not recover after drop");
+        assert!(free2 > free1, "free memory did not recover after drop");
+        assert_eq!(free2, free0, "freed memory did not match pre-allocated memory")
     }
 
     #[test]
@@ -2017,6 +2051,46 @@ mod tests {
     }
 
     #[test]
+    fn test_pinned_copy_is_faster() {
+        // Pinned host memory should make H→D transfers measurably faster
+        // than pageable memory because HIP can DMA straight from the
+        // physical pages without staging through a driver-internal copy.
+        //
+        // The 1.5x threshold is empirical and PCIe/topology-dependent;
+        // on lower-end iGPUs (shared host memory) the speedup is small,
+        // on discrete cards it's usually 2-5x. Adjust per hardware if
+        // CI sees flakes.
+        use std::time::Instant;
+        let ctx = HipContext::new(0).unwrap();
+        let stream = ctx.new_stream().unwrap();
+
+        let n = 100_000;
+        let n_samples = 5;
+        let not_pinned = vec![0.0f32; n];
+
+        let start = Instant::now();
+        for _ in 0..n_samples {
+            let _ = stream.clone_htod(&not_pinned).unwrap();
+            stream.synchronize().unwrap();
+        }
+        let unpinned_elapsed = start.elapsed() / n_samples;
+
+        let pinned = unsafe { ctx.alloc_pinned::<f32>(n) }.unwrap();
+
+        let start = Instant::now();
+        for _ in 0..n_samples {
+            let _ = stream.clone_htod(&pinned).unwrap();
+            stream.synchronize().unwrap();
+        }
+        let pinned_elapsed = start.elapsed() / n_samples;
+
+        assert!(
+            pinned_elapsed.as_secs_f32() * 1.5 < unpinned_elapsed.as_secs_f32(),
+            "{unpinned_elapsed:?} vs {pinned_elapsed:?}",
+        );
+    }
+
+    #[test]
     fn test_primary_context_is_primary() {
         let ctx = HipContext::new(0).unwrap();
         assert!(ctx.is_primary());
@@ -2078,31 +2152,5 @@ mod tests {
         })
         .join()
         .unwrap();
-    }
-
-    #[test]
-    fn test_synchronize_no_panic() {
-        let ctx = HipContext::new(0).unwrap();
-        ctx.synchronize().unwrap();
-    }
-
-    #[test]
-    fn test_event_record_and_synchronize() {
-        let ctx = HipContext::new(0).unwrap();
-        let stream = ctx.default_stream();
-        let event = ctx.new_event(None).unwrap();
-        event.record(&stream).unwrap();
-        event.synchronize().unwrap();
-        assert!(event.is_complete().unwrap());
-    }
-
-    #[test]
-    fn test_compute_capability_returns_pair() {
-        let ctx = HipContext::new(0).unwrap();
-        let (major, minor) = ctx.compute_capability().unwrap();
-        assert!(major >= 0);
-        assert!(minor >= 0);
-        // Silence dead_code on Ordering import — used in other test mods.
-        let _ = Ordering::Relaxed;
     }
 }

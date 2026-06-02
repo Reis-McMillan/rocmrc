@@ -1,7 +1,7 @@
 //! Thin `Result`-wrapped hipRTC FFI. Mirror layout: `cudarc::nvrtc::result`.
 
 pub use super::{HiprtcError, sys};
-use crate::driver::result::HipResult;
+use crate::hip::result::HipResult;
 use std::ffi::CString;
 
 #[inline]

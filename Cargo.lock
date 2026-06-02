@@ -272,6 +272,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "float4"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5939bac0ef2ad7c83a53e4fb889c1d81f007b07061d648cd271071984d86f257"
+
+[[package]]
+name = "float8"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dee36245af1dccf978103fcd393582806db2a1d0bcd2f38c663cdbb4a363a01c"
+dependencies = [
+ "half",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -541,6 +556,8 @@ name = "rocmrc"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "float4",
+ "float8",
  "half",
  "libloading",
  "thiserror",

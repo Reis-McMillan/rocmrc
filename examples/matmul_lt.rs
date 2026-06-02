@@ -6,7 +6,7 @@
 //! Run (pick any rocm-XYYYY feature matching the installed ROCm version):
 //!   ROCM_PATH=/opt/rocm cargo run --features hipblaslt,rocm-07021 --example matmul_lt
 
-use rocmrc::driver::{HipContext, HipSlice};
+use rocmrc::hip::{HipContext, HipSlice};
 use rocmrc::hipblaslt::{
     HipBlasLt, MatmulDesc, MatmulPref, MatrixLayout,
     hipDataType, hipblasComputeType_t, hipblasLtEpilogue_t, hipblasOperation_t,

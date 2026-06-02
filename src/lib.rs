@@ -4,7 +4,7 @@
 //! a kernel-launch-based runtime. Grow this crate by following `cudarc`'s
 //! API shape so call sites in luminal stay near-identical.
 
-pub mod driver;
+pub mod hip;
 pub mod hiprtc;
 
 #[cfg(feature = "rocblas")]
@@ -12,8 +12,13 @@ pub mod rocblas;
 #[cfg(feature = "hipblaslt")]
 pub mod hipblaslt;
 
-pub use driver::{DevicePtr, DriverError, HipContext, HipFunction, HipModule, HipSlice, HipStream};
-pub use driver::result::HipResult;
+pub use hip::{
+    profiler_start, profiler_stop, DevicePtr, DevicePtrMut, DeviceRepr, DeviceSlice,
+    EventWaitFlags, ExternalMemory, HipContext, HipError, HipEvent, HipFunction, HipGraph,
+    HipModule, HipSlice, HipStream, HipUnifiedSlice, HipUnifiedView, HipUnifiedViewMut,
+    HipView, HipViewMut, HostSlice, LaunchArgs, LaunchConfig, MappedBuffer, MemAttachFlags,
+    PinnedHostSlice, Profiler, PushKernelArg, StreamKind, SyncOnDrop, ValidAsZeroBits,
+};
 pub use hiprtc::{HiprtcError, Hsaco};
 
 #[cfg(feature = "rocblas")]
