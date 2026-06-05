@@ -1006,7 +1006,8 @@ void check(float* buf, int n) {
 "#;
 
     fn compile_check(ctx: &Arc<HipContext>) -> crate::hip::safe::HipFunction {
-        let (hsaco, _log) = hiprtc::compile(CHECK_KERNEL, ctx.gfx_arch()).unwrap();
+        let gfx = ctx.gfx_version().expect("unsupported gfx arch");
+        let hsaco = hiprtc::compile_hsaco(CHECK_KERNEL, gfx).unwrap();
         let module = ctx.load_module(hsaco).unwrap();
         module.load_function("check").unwrap()
     }

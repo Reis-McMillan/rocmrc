@@ -213,6 +213,26 @@ impl HipContext {
         result::device::get_properties(self.ordinal as std::ffi::c_int)
     }
 
+    /// The device's gfx arch as a string (e.g. `"gfx1100"`). Reads
+    /// `gcnArchName` from the device properties and strips HIP's feature
+    /// suffix (`":sramecc-:xnack-"` etc.) at the first `:`.
+    pub fn gfx_arch(&self) -> Result<String, HipError> {
+        let props = self.properties()?;
+        let cstr = unsafe { std::ffi::CStr::from_ptr(props.gcnArchName.as_ptr()) };
+        let raw = cstr.to_string_lossy();
+        Ok(raw.split(':').next().unwrap_or(&raw).to_string())
+    }
+
+    /// Typed counterpart to [`Self::gfx_arch`]. Returns
+    /// `Err(HipError(hipErrorInvalidValue))` if the device reports an
+    /// arch that isn't in [`crate::hiprtc::GfxVersion`].
+    pub fn gfx_version(&self) -> Result<crate::hiprtc::GfxVersion, HipError> {
+        use std::str::FromStr;
+        let arch = self.gfx_arch()?;
+        crate::hiprtc::GfxVersion::from_str(&arch)
+            .map_err(|_| HipError(sys::hipError_t::hipErrorInvalidValue))
+    }
+
     /// Destroy the current device's primary context and release every
     /// resource it holds — allocations, modules, streams, events. Any
     /// `Hip*` value that referenced this device becomes invalid.
@@ -1680,7 +1700,7 @@ impl<T> HostSlice<T> for PinnedHostSlice<T> {
     ) -> (&'a [T], SyncOnDrop<'a>) {
         stream.ctx.record_err(stream.wait(&self.event));
         (
-            std::slice::from_raw_parts(self.ptr, self.len),
+            unsafe { std::slice::from_raw_parts(self.ptr, self.len) },
             SyncOnDrop::Record(Some((&self.event, stream))),
         )
     }
@@ -1691,7 +1711,7 @@ impl<T> HostSlice<T> for PinnedHostSlice<T> {
     ) -> (&'a mut [T], SyncOnDrop<'a>) {
         stream.ctx.record_err(stream.wait(&self.event));
         (
-            std::slice::from_raw_parts_mut(self.ptr, self.len),
+            unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) },
             SyncOnDrop::Record(Some((&self.event, stream))),
         )
     }
@@ -1722,12 +1742,18 @@ impl Drop for HipModule {
 
 impl HipContext {
     /// Load an hsaco / fatbin code object into this context.
+    ///
+    /// For [`crate::hiprtc::HsacoKind::File`] hsacos, the file is read
+    /// here; I/O errors surface as `HipError(hipErrorFileNotFound)`.
     pub fn load_module(
         self: &Arc<Self>,
         hsaco: crate::hiprtc::Hsaco,
     ) -> Result<Arc<HipModule>, HipError> {
         self.bind_to_thread()?;
-        let hip_module = unsafe { result::module::load_data(hsaco.as_bytes()) }?;
+        let bytes = hsaco
+            .as_bytes()
+            .map_err(|_| HipError(sys::hipError_t::hipErrorFileNotFound))?;
+        let hip_module = unsafe { result::module::load_data(bytes.as_ref()) }?;
         Ok(Arc::new(HipModule {
             hip_module,
             ctx: self.clone(),

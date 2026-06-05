@@ -225,12 +225,12 @@ pub mod device {
         device_id: c_int,
         peer_id: c_int
     ) -> Result<bool, HipError> {
-        let mut can_access: i32;
+        let mut can_access: i32 = 0;
         unsafe { sys::hipDeviceCanAccessPeer(
             &mut can_access,
             device_id,
             peer_id
-        )? };
+        ).result()? };
         Ok(can_access != 0)
     } 
 }

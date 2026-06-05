@@ -298,7 +298,8 @@ mod tests {
 
     fn compile(src: &str, name: &str) -> (std::sync::Arc<crate::hip::safe::HipContext>, crate::hip::safe::HipFunction) {
         let ctx = HipContext::new(0).unwrap();
-        let (hsaco, _log) = hiprtc::compile(src, ctx.gfx_arch()).expect("hipRTC compile");
+        let gfx = ctx.gfx_version().expect("unsupported gfx arch");
+        let hsaco = hiprtc::compile_hsaco(src, gfx).expect("hipRTC compile");
         let module = ctx.load_module(hsaco).unwrap();
         let f = module.load_function(name).unwrap();
         (ctx, f)
@@ -838,8 +839,9 @@ void peer_slow_worker(const float* data, size_t len, float* out) {
         result::device::enable_peer_access(0, 0)?;
         ctx1.bind_to_thread()?;
 
-        let (hsaco, _log) =
-            crate::hiprtc::compile(PEER_SLOW_KERNELS, ctx1.gfx_arch()).expect("hipRTC compile");
+        let gfx = ctx1.gfx_version().expect("unsupported gfx arch");
+        let hsaco = crate::hiprtc::compile_hsaco(PEER_SLOW_KERNELS, gfx)
+            .expect("hipRTC compile");
         let module = ctx1.load_module(hsaco)?;
         let slow_worker = module.load_function("peer_slow_worker")?;
 
