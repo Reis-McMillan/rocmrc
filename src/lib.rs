@@ -29,7 +29,7 @@ pub use rocblas::{
 
 #[cfg(feature = "hipblaslt")]
 pub use hipblaslt::{
-    HipBlasLt, HipBlasLtError, MatmulDesc, MatmulHeuristic, MatmulPref, MatrixLayout,
+    Activation, HipBlasLT, HipblasError, Matmul, MatmulConfig, MatmulShared, Workspace,
 };
 
 #[cfg(feature = "dynamic-loading")]

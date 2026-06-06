@@ -25,6 +25,10 @@ hipblaslt = []
 # half-precision GEMM trait impls, so no `f16` feature gate is needed.
 f8 = ["dep:float8"]
 f4 = ["dep:float4"]
+# Gate `Matmul<half::f16>` / `Matmul<half::bf16>` impls in hipblaslt
+# (mirrors cudarc's nvrtc-side `f16` gate). The `half` dep itself is
+# unconditional because rocblas needs it.
+f16 = []
 
 # ROCm version axis. Consumers pick exactly one to select which committed
 # binding (under src/<mod>/sys/linked/sys_<ver>.rs) the merged sys.rs includes.

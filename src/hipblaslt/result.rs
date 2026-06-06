@@ -1,198 +1,261 @@
-//! Thin `Result`-wrapped hipBLASLt FFI. Mirror layout: `cudarc::cublaslt::result`.
+//! Thin `Result`-wrapped hipBLASLt FFI. Mirror layout:
+//! [`cudarc::cublaslt::result`]. Function shapes and `unsafe`-markers
+//! follow cudarc 1:1 — every handle/descriptor lifecycle (create, set,
+//! destroy) is wrapped, plus the heuristic search and `matmul` itself.
 
-use std::ffi::c_void;
+use super::sys::{self};
+use crate::hipblaslt::sys::hipblasLtMatmulAlgo_t;
+use core::ffi::c_void;
+use core::mem::MaybeUninit;
 
-pub use super::{HipBlasLtError, sys};
-use crate::hip::result::HipResult;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct HipblasError(pub sys::hipblasStatus_t);
 
-#[inline]
-fn check(r: sys::hipblasStatus_t) -> Result<(), HipBlasLtError> {
-    if r == sys::hipblasStatus_t::HIPBLAS_STATUS_SUCCESS {
-        Ok(())
-    } else {
-        Err(HipBlasLtError::HipBlasLt(r))
+impl sys::hipblasStatus_t {
+    pub fn result(self) -> Result<(), HipblasError> {
+        match self {
+            sys::hipblasStatus_t::HIPBLAS_STATUS_SUCCESS => Ok(()),
+            _ => Err(HipblasError(self)),
+        }
     }
 }
 
-impl HipResult for sys::hipblasStatus_t {
-    type Err = HipBlasLtError;
-    fn result(self) -> Result<(), HipBlasLtError> {
-        check(self)
+impl std::fmt::Display for HipblasError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
-// ----- handle lifecycle -----
+impl std::error::Error for HipblasError {}
 
-pub fn create() -> Result<sys::hipblasLtHandle_t, HipBlasLtError> {
-    let mut h: sys::hipblasLtHandle_t = std::ptr::null_mut();
-    unsafe { check(sys::hipblasLtCreate(&mut h))? };
-    Ok(h)
+/// Creates a handle to the hipBLASLt library. Mirrors `cublasLtCreate`.
+pub fn create_handle() -> Result<sys::hipblasLtHandle_t, HipblasError> {
+    let mut handle = MaybeUninit::uninit();
+    unsafe {
+        sys::hipblasLtCreate(handle.as_mut_ptr()).result()?;
+        Ok(handle.assume_init())
+    }
 }
 
-pub fn destroy(h: sys::hipblasLtHandle_t) -> Result<(), HipBlasLtError> {
-    unsafe { check(sys::hipblasLtDestroy(h)) }
+/// Destroy a handle previously created with [`create_handle`].
+///
+/// # Safety
+/// `handle` must not have been freed already.
+pub fn destroy_handle(handle: sys::hipblasLtHandle_t) -> Result<(), HipblasError> {
+    unsafe { sys::hipblasLtDestroy(handle).result() }
 }
 
-// ----- matrix layout -----
-
-pub fn matrix_layout_create(
-    dtype: sys::hipDataType,
+/// Creates a matrix layout descriptor.
+pub fn create_matrix_layout(
+    matrix_type: sys::hipDataType,
     rows: u64,
     cols: u64,
     ld: i64,
-) -> Result<sys::hipblasLtMatrixLayout_t, HipBlasLtError> {
-    let mut layout: sys::hipblasLtMatrixLayout_t = std::ptr::null_mut();
-    unsafe { check(sys::hipblasLtMatrixLayoutCreate(&mut layout, dtype, rows, cols, ld))? };
-    Ok(layout)
+) -> Result<sys::hipblasLtMatrixLayout_t, HipblasError> {
+    let mut matrix_layout = MaybeUninit::uninit();
+    unsafe {
+        sys::hipblasLtMatrixLayoutCreate(
+            matrix_layout.as_mut_ptr(),
+            matrix_type,
+            rows,
+            cols,
+            ld,
+        )
+        .result()?;
+        Ok(matrix_layout.assume_init())
+    }
 }
 
-pub fn matrix_layout_destroy(
-    layout: sys::hipblasLtMatrixLayout_t,
-) -> Result<(), HipBlasLtError> {
-    unsafe { check(sys::hipblasLtMatrixLayoutDestroy(layout)) }
-}
-
-/// # Safety: `buf` must point to `size` bytes of the type expected by `attr`.
-pub unsafe fn matrix_layout_set_attribute(
-    layout: sys::hipblasLtMatrixLayout_t,
+/// Sets the value of the specified attribute on a matrix layout descriptor.
+///
+/// # Safety
+/// `matrix_layout` must not have been freed already.
+pub fn set_matrix_layout_attribute(
+    matrix_layout: sys::hipblasLtMatrixLayout_t,
     attr: sys::hipblasLtMatrixLayoutAttribute_t,
     buf: *const c_void,
-    size: usize,
-) -> Result<(), HipBlasLtError> {
-    unsafe { check(sys::hipblasLtMatrixLayoutSetAttribute(layout, attr, buf, size)) }
+    buf_size: usize,
+) -> Result<(), HipblasError> {
+    unsafe {
+        sys::hipblasLtMatrixLayoutSetAttribute(matrix_layout, attr, buf, buf_size).result()
+    }
 }
 
-// ----- matmul descriptor -----
-
-pub fn matmul_desc_create(
-    compute: sys::hipblasComputeType_t,
-    scale: sys::hipDataType,
-) -> Result<sys::hipblasLtMatmulDesc_t, HipBlasLtError> {
-    let mut desc: sys::hipblasLtMatmulDesc_t = std::ptr::null_mut();
-    unsafe { check(sys::hipblasLtMatmulDescCreate(&mut desc, compute, scale))? };
-    Ok(desc)
+/// Destroy a matrix layout descriptor.
+///
+/// # Safety
+/// `matrix_layout` must not have been freed already.
+pub fn destroy_matrix_layout(
+    matrix_layout: sys::hipblasLtMatrixLayout_t,
+) -> Result<(), HipblasError> {
+    unsafe { sys::hipblasLtMatrixLayoutDestroy(matrix_layout).result() }
 }
 
-pub fn matmul_desc_destroy(
-    desc: sys::hipblasLtMatmulDesc_t,
-) -> Result<(), HipBlasLtError> {
-    unsafe { check(sys::hipblasLtMatmulDescDestroy(desc)) }
+/// Creates a matrix multiply descriptor.
+pub fn create_matmul_desc(
+    compute_type: sys::hipblasComputeType_t,
+    scale_type: sys::hipDataType,
+) -> Result<sys::hipblasLtMatmulDesc_t, HipblasError> {
+    let mut matmul_desc = MaybeUninit::uninit();
+    unsafe {
+        sys::hipblasLtMatmulDescCreate(matmul_desc.as_mut_ptr(), compute_type, scale_type)
+            .result()?;
+        Ok(matmul_desc.assume_init())
+    }
 }
 
-/// # Safety: `buf` must point to `size` bytes of the type expected by `attr`.
-pub unsafe fn matmul_desc_set_attribute(
-    desc: sys::hipblasLtMatmulDesc_t,
+/// Sets the value of the specified attribute on a matrix multiply descriptor.
+///
+/// # Safety
+/// `matmul_desc` must not have been freed already.
+pub fn set_matmul_desc_attribute(
+    matmul_desc: sys::hipblasLtMatmulDesc_t,
     attr: sys::hipblasLtMatmulDescAttributes_t,
     buf: *const c_void,
-    size: usize,
-) -> Result<(), HipBlasLtError> {
-    unsafe { check(sys::hipblasLtMatmulDescSetAttribute(desc, attr, buf, size)) }
+    buf_size: usize,
+) -> Result<(), HipblasError> {
+    unsafe {
+        sys::hipblasLtMatmulDescSetAttribute(matmul_desc, attr, buf, buf_size).result()
+    }
 }
 
-// ----- preference -----
-
-pub fn matmul_preference_create() -> Result<sys::hipblasLtMatmulPreference_t, HipBlasLtError> {
-    let mut pref: sys::hipblasLtMatmulPreference_t = std::ptr::null_mut();
-    unsafe { check(sys::hipblasLtMatmulPreferenceCreate(&mut pref))? };
-    Ok(pref)
+/// Destroy a matrix multiply descriptor.
+///
+/// # Safety
+/// `matmul_desc` must not have been freed already.
+pub fn destroy_matmul_desc(
+    matmul_desc: sys::hipblasLtMatmulDesc_t,
+) -> Result<(), HipblasError> {
+    unsafe { sys::hipblasLtMatmulDescDestroy(matmul_desc).result() }
 }
 
-pub fn matmul_preference_destroy(
-    pref: sys::hipblasLtMatmulPreference_t,
-) -> Result<(), HipBlasLtError> {
-    unsafe { check(sys::hipblasLtMatmulPreferenceDestroy(pref)) }
+/// Creates a matrix multiply heuristic-search preferences descriptor.
+pub fn create_matmul_pref() -> Result<sys::hipblasLtMatmulPreference_t, HipblasError> {
+    let mut matmul_pref = MaybeUninit::uninit();
+    unsafe {
+        sys::hipblasLtMatmulPreferenceCreate(matmul_pref.as_mut_ptr()).result()?;
+        Ok(matmul_pref.assume_init())
+    }
 }
 
-/// # Safety: `buf` must point to `size` bytes of the type expected by `attr`.
-pub unsafe fn matmul_preference_set_attribute(
-    pref: sys::hipblasLtMatmulPreference_t,
+/// Sets the value of the specified attribute on a matmul preferences descriptor.
+///
+/// # Safety
+/// `matmul_pref` must not have been freed already.
+pub fn set_matmul_pref_attribute(
+    matmul_pref: sys::hipblasLtMatmulPreference_t,
     attr: sys::hipblasLtMatmulPreferenceAttributes_t,
     buf: *const c_void,
-    size: usize,
-) -> Result<(), HipBlasLtError> {
+    buf_size: usize,
+) -> Result<(), HipblasError> {
     unsafe {
-        check(sys::hipblasLtMatmulPreferenceSetAttribute(
-            pref, attr, buf, size,
-        ))
+        sys::hipblasLtMatmulPreferenceSetAttribute(matmul_pref, attr, buf, buf_size).result()
     }
 }
 
-// ----- heuristic -----
+/// Destroy a matmul preferences descriptor previously created with
+/// [`create_matmul_pref`].
+///
+/// # Safety
+/// `matmul_pref` must not have been freed already.
+pub fn destroy_matmul_pref(
+    matmul_pref: sys::hipblasLtMatmulPreference_t,
+) -> Result<(), HipblasError> {
+    unsafe { sys::hipblasLtMatmulPreferenceDestroy(matmul_pref).result() }
+}
 
-/// # Safety: handle/desc/layouts/pref must all be valid and alive.
-pub unsafe fn matmul_algo_get_heuristic(
+/// Retrieves the fastest algorithm for the matrix-multiply configuration
+/// described by the matmul descriptor, A/B/C/D layouts, and preferences.
+///
+/// Returns `Err(HipblasError(HIPBLAS_STATUS_NOT_SUPPORTED))` if hipBLASLt
+/// can't find any algorithm matching the request.
+///
+/// # Safety
+/// All sys objects must outlive this call and must not have been freed.
+pub fn get_matmul_algo_heuristic(
     handle: sys::hipblasLtHandle_t,
-    desc: sys::hipblasLtMatmulDesc_t,
+    matmul_desc: sys::hipblasLtMatmulDesc_t,
     a_layout: sys::hipblasLtMatrixLayout_t,
     b_layout: sys::hipblasLtMatrixLayout_t,
     c_layout: sys::hipblasLtMatrixLayout_t,
     d_layout: sys::hipblasLtMatrixLayout_t,
-    pref: sys::hipblasLtMatmulPreference_t,
-    requested: u32,
-) -> Result<Vec<sys::hipblasLtMatmulHeuristicResult_t>, HipBlasLtError> {
-    // SAFETY: we hand bindgen a freshly-allocated slice of MaybeUninit storage and
-    // let it fill it; then we set_len to the count it reports back. The struct is
-    // POD (no Drop), so any uninitialised tail is forgotten cheaply.
-    let mut buf: Vec<sys::hipblasLtMatmulHeuristicResult_t> = Vec::with_capacity(requested as usize);
-    let mut returned: ::core::ffi::c_int = 0;
+    matmul_pref: sys::hipblasLtMatmulPreference_t,
+) -> Result<sys::hipblasLtMatmulHeuristicResult_t, HipblasError> {
+    let mut matmul_heuristic = MaybeUninit::uninit();
+    let mut algo_count: core::ffi::c_int = 0;
+
     unsafe {
-        check(sys::hipblasLtMatmulAlgoGetHeuristic(
+        sys::hipblasLtMatmulAlgoGetHeuristic(
             handle,
-            desc,
+            matmul_desc,
             a_layout,
             b_layout,
             c_layout,
             d_layout,
-            pref,
-            requested as ::core::ffi::c_int,
-            buf.as_mut_ptr(),
-            &mut returned,
-        ))?;
-        buf.set_len(returned as usize);
+            matmul_pref,
+            1, // only select the fastest algo
+            matmul_heuristic.as_mut_ptr(),
+            &mut algo_count,
+        )
+        .result()?;
     }
-    Ok(buf)
+
+    if algo_count == 0 {
+        return Err(HipblasError(
+            sys::hipblasStatus_t::HIPBLAS_STATUS_NOT_SUPPORTED,
+        ));
+    }
+
+    let matmul_heuristic = unsafe { matmul_heuristic.assume_init() };
+    matmul_heuristic.state.result()?;
+
+    Ok(matmul_heuristic)
 }
 
-// ----- matmul -----
-
-/// # Safety: device pointers (A/B/C/D/workspace) must be valid for the layouts.
+/// Computes `D = alpha * (A * B) + beta * C` where A, B, C are input
+/// matrices and `alpha` / `beta` are input scalars.
+///
+/// # Safety
+/// All sys objects must outlive this call and must not have been freed.
+/// `workspace` must be at least `workspace_size` bytes.
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn matmul(
+pub fn matmul(
     handle: sys::hipblasLtHandle_t,
-    desc: sys::hipblasLtMatmulDesc_t,
+    matmul_desc: sys::hipblasLtMatmulDesc_t,
     alpha: *const c_void,
-    a: u64,
-    a_layout: sys::hipblasLtMatrixLayout_t,
-    b: u64,
-    b_layout: sys::hipblasLtMatrixLayout_t,
     beta: *const c_void,
-    c: u64,
+    a: *const c_void,
+    a_layout: sys::hipblasLtMatrixLayout_t,
+    b: *const c_void,
+    b_layout: sys::hipblasLtMatrixLayout_t,
+    c: *const c_void,
     c_layout: sys::hipblasLtMatrixLayout_t,
-    d: u64,
+    d: *mut c_void,
     d_layout: sys::hipblasLtMatrixLayout_t,
-    algo: &sys::hipblasLtMatmulAlgo_t,
-    workspace: u64,
+    algo: *const hipblasLtMatmulAlgo_t,
+    workspace: *mut c_void,
     workspace_size: usize,
     stream: sys::hipStream_t,
-) -> Result<(), HipBlasLtError> {
+) -> Result<(), HipblasError> {
     unsafe {
-        check(sys::hipblasLtMatmul(
+        sys::hipblasLtMatmul(
             handle,
-            desc,
+            matmul_desc,
             alpha,
-            a as *const c_void,
+            a,
             a_layout,
-            b as *const c_void,
+            b,
             b_layout,
             beta,
-            c as *const c_void,
+            c,
             c_layout,
-            d as *mut c_void,
+            d,
             d_layout,
             algo,
-            workspace as *mut c_void,
+            workspace,
             workspace_size,
             stream,
-        ))
+        )
+        .result()
     }
 }
