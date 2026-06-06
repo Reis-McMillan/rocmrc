@@ -1,331 +1,521 @@
-//! Thin `Result`-wrapped rocBLAS FFI. Mirror layout: `cudarc::cublas::result`.
+//! Thin `Result`-wrapped rocBLAS FFI. Mirror layout:
+//! [`cudarc::cublas::result`]. Surface matches cudarc 1:1 — handle
+//! lifecycle, set_stream, GEMV / GEMM (s/d/h) and their strided-batched
+//! variants, the `_ex` mixed-precision GEMMs, and the L1 reductions
+//! cudarc surfaces (`asum`). Other L1 helpers (axpy / scal / nrm2 / dot
+//! / copy) are wrapped here too so the safe layer's per-T traits can
+//! lower into them.
+//!
+//! **rocBLAS type idioms (not cuBLAS-shaped):**
+//! - `rocblas_int` (i32) instead of `c_int` — same underlying width but
+//!   the rocBLAS API spells it explicitly.
+//! - `rocblas_stride` (i64) instead of `c_longlong` — same width but the
+//!   rocBLAS-idiomatic name.
+//! - `rocblas_half` (`#[repr(C)] struct { data: u16 }`) instead of
+//!   `__half`. Layout-equivalent to `half::f16`; we accept
+//!   `*const half::f16` at the wrapper boundary and cast at the FFI
+//!   call.
+//!
+//! **ILP64 (`_64`) API:** rocBLAS additionally ships
+//! `rocblas_sgemm_64` / `rocblas_sgemm_strided_batched_64` / etc. that
+//! take `i64` index arguments (instead of `rocblas_int`). This module
+//! wraps only the standard 32-bit API, matching cudarc's choice. Reach
+//! into `sys::rocblas_*_64` directly if you need 64-bit indices for
+//! oversized matrices.
 
-use std::ffi::c_void;
+use super::sys::{self};
+use core::ffi::c_void;
+use core::mem::MaybeUninit;
 
-pub use super::{RocblasError, sys};
-use crate::hip::result::HipResult;
+pub struct RocblasError(pub sys::rocblas_status);
 
-#[inline]
-fn check(r: sys::rocblas_status) -> Result<(), RocblasError> {
-    if r == sys::rocblas_status::rocblas_status_success {
-        Ok(())
-    } else {
-        Err(RocblasError::Rocblas(r))
+impl sys::rocblas_status {
+    pub fn result(self) -> Result<(), RocblasError> {
+        match self {
+            sys::rocblas_status::rocblas_status_success => Ok(()),
+            _ => Err(RocblasError(self)),
+        }
     }
 }
 
-impl HipResult for sys::rocblas_status {
-    type Err = RocblasError;
-    fn result(self) -> Result<(), RocblasError> {
-        check(self)
+impl std::fmt::Debug for RocblasError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RocblasError").field(&self.0).finish()
     }
 }
 
-// ----- handle lifecycle -----
+impl std::fmt::Display for RocblasError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
 
+impl std::error::Error for RocblasError {}
+
+// ---------------------------------------------------------------------------
+// Handle lifecycle
+// ---------------------------------------------------------------------------
+
+/// Create a rocBLAS handle.
 pub fn create_handle() -> Result<sys::rocblas_handle, RocblasError> {
-    let mut h: sys::rocblas_handle = std::ptr::null_mut();
-    unsafe { check(sys::rocblas_create_handle(&mut h))? };
-    Ok(h)
+    let mut handle = MaybeUninit::uninit();
+    unsafe {
+        sys::rocblas_create_handle(handle.as_mut_ptr()).result()?;
+        Ok(handle.assume_init())
+    }
 }
 
-pub fn destroy_handle(h: sys::rocblas_handle) -> Result<(), RocblasError> {
-    unsafe { check(sys::rocblas_destroy_handle(h)) }
+/// # Safety
+/// `handle` must not have already been destroyed.
+pub unsafe fn destroy_handle(handle: sys::rocblas_handle) -> Result<(), RocblasError> {
+    unsafe { sys::rocblas_destroy_handle(handle).result() }
 }
 
-pub fn set_stream(h: sys::rocblas_handle, s: sys::hipStream_t) -> Result<(), RocblasError> {
-    unsafe { check(sys::rocblas_set_stream(h, s)) }
+/// # Safety
+/// `handle` must be live; `stream` must be a live `hipStream_t`.
+pub unsafe fn set_stream(
+    handle: sys::rocblas_handle,
+    stream: sys::hipStream_t,
+) -> Result<(), RocblasError> {
+    unsafe { sys::rocblas_set_stream(handle, stream).result() }
 }
 
-pub fn set_pointer_mode(
-    h: sys::rocblas_handle,
+/// Switch pointer mode (host vs device) for scalar `alpha` / `beta`
+/// args and reduction `result` arguments. Defaults to host on a fresh
+/// handle.
+///
+/// # Safety
+/// `handle` must be live.
+pub unsafe fn set_pointer_mode(
+    handle: sys::rocblas_handle,
     mode: sys::rocblas_pointer_mode,
 ) -> Result<(), RocblasError> {
-    unsafe { check(sys::rocblas_set_pointer_mode(h, mode)) }
+    unsafe { sys::rocblas_set_pointer_mode(handle, mode).result() }
 }
 
-// ----- L3: GEMM (typed) -----
+// ---------------------------------------------------------------------------
+// L2 — GEMV (single + double)
+// ---------------------------------------------------------------------------
 
-#[allow(clippy::too_many_arguments)]
+/// # Safety
+/// All pointers must be valid for `m * n` / `n` / `m` elements respectively
+/// at the given strides. `alpha` / `beta` follow the handle's pointer mode.
+pub unsafe fn sgemv(
+    handle: sys::rocblas_handle,
+    trans: sys::rocblas_operation,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: sys::rocblas_int,
+    x: *const f32,
+    incx: sys::rocblas_int,
+    beta: *const f32,
+    y: *mut f32,
+    incy: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe {
+        sys::rocblas_sgemv(handle, trans, m, n, alpha, a, lda, x, incx, beta, y, incy).result()
+    }
+}
+
+/// # Safety: see [`sgemv`].
+pub unsafe fn dgemv(
+    handle: sys::rocblas_handle,
+    trans: sys::rocblas_operation,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: sys::rocblas_int,
+    x: *const f64,
+    incx: sys::rocblas_int,
+    beta: *const f64,
+    y: *mut f64,
+    incy: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe {
+        sys::rocblas_dgemv(handle, trans, m, n, alpha, a, lda, x, incx, beta, y, incy).result()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// L3 — GEMM (half / single / double)
+// ---------------------------------------------------------------------------
+
+/// # Safety
+/// `a`, `b`, `c` must be valid device buffers of appropriate sizes.
+/// `alpha` / `beta` follow the handle's pointer mode.
+///
+/// Casts `*const half::f16` → `*const sys::rocblas_half` at the FFI
+/// boundary. Both are `repr(C)` over `u16` and are layout-compatible.
+pub unsafe fn hgemm(
+    handle: sys::rocblas_handle,
+    transa: sys::rocblas_operation,
+    transb: sys::rocblas_operation,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
+    alpha: *const half::f16,
+    a: *const half::f16,
+    lda: sys::rocblas_int,
+    b: *const half::f16,
+    ldb: sys::rocblas_int,
+    beta: *const half::f16,
+    c: *mut half::f16,
+    ldc: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe {
+        sys::rocblas_hgemm(
+            handle,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha as *const sys::rocblas_half,
+            a as *const sys::rocblas_half,
+            lda,
+            b as *const sys::rocblas_half,
+            ldb,
+            beta as *const sys::rocblas_half,
+            c as *mut sys::rocblas_half,
+            ldc,
+        )
+        .result()
+    }
+}
+
+/// # Safety: see [`hgemm`].
 pub unsafe fn sgemm(
-    h: sys::rocblas_handle,
+    handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
     transb: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    k: i32,
-    alpha: &f32,
-    a: u64,
-    lda: i32,
-    b: u64,
-    ldb: i32,
-    beta: &f32,
-    c: u64,
-    ldc: i32,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: sys::rocblas_int,
+    b: *const f32,
+    ldb: sys::rocblas_int,
+    beta: *const f32,
+    c: *mut f32,
+    ldc: sys::rocblas_int,
 ) -> Result<(), RocblasError> {
     unsafe {
-        check(sys::rocblas_sgemm(
-            h,
-            transa,
-            transb,
-            m,
-            n,
-            k,
-            alpha,
-            a as *const f32,
-            lda,
-            b as *const f32,
-            ldb,
-            beta,
-            c as *mut f32,
-            ldc,
-        ))
+        sys::rocblas_sgemm(
+            handle, transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
+        )
+        .result()
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// # Safety: see [`hgemm`].
 pub unsafe fn dgemm(
-    h: sys::rocblas_handle,
+    handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
     transb: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    k: i32,
-    alpha: &f64,
-    a: u64,
-    lda: i32,
-    b: u64,
-    ldb: i32,
-    beta: &f64,
-    c: u64,
-    ldc: i32,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: sys::rocblas_int,
+    b: *const f64,
+    ldb: sys::rocblas_int,
+    beta: *const f64,
+    c: *mut f64,
+    ldc: sys::rocblas_int,
 ) -> Result<(), RocblasError> {
     unsafe {
-        check(sys::rocblas_dgemm(
-            h,
+        sys::rocblas_dgemm(
+            handle, transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
+        )
+        .result()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// L3 — strided-batched GEMM (half / single / double)
+// ---------------------------------------------------------------------------
+
+/// # Safety: same as [`hgemm`] applied per batch element.
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn hgemm_strided_batched(
+    handle: sys::rocblas_handle,
+    transa: sys::rocblas_operation,
+    transb: sys::rocblas_operation,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
+    alpha: *const half::f16,
+    a: *const half::f16,
+    lda: sys::rocblas_int,
+    stride_a: sys::rocblas_stride,
+    b: *const half::f16,
+    ldb: sys::rocblas_int,
+    stride_b: sys::rocblas_stride,
+    beta: *const half::f16,
+    c: *mut half::f16,
+    ldc: sys::rocblas_int,
+    stride_c: sys::rocblas_stride,
+    batch_count: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe {
+        sys::rocblas_hgemm_strided_batched(
+            handle,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha as *const sys::rocblas_half,
+            a as *const sys::rocblas_half,
+            lda,
+            stride_a,
+            b as *const sys::rocblas_half,
+            ldb,
+            stride_b,
+            beta as *const sys::rocblas_half,
+            c as *mut sys::rocblas_half,
+            ldc,
+            stride_c,
+            batch_count,
+        )
+        .result()
+    }
+}
+
+/// # Safety: same as [`sgemm`] applied per batch element.
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn sgemm_strided_batched(
+    handle: sys::rocblas_handle,
+    transa: sys::rocblas_operation,
+    transb: sys::rocblas_operation,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
+    alpha: *const f32,
+    a: *const f32,
+    lda: sys::rocblas_int,
+    stride_a: sys::rocblas_stride,
+    b: *const f32,
+    ldb: sys::rocblas_int,
+    stride_b: sys::rocblas_stride,
+    beta: *const f32,
+    c: *mut f32,
+    ldc: sys::rocblas_int,
+    stride_c: sys::rocblas_stride,
+    batch_count: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe {
+        sys::rocblas_sgemm_strided_batched(
+            handle,
             transa,
             transb,
             m,
             n,
             k,
             alpha,
-            a as *const f64,
+            a,
             lda,
-            b as *const f64,
+            stride_a,
+            b,
             ldb,
+            stride_b,
             beta,
-            c as *mut f64,
+            c,
             ldc,
-        ))
+            stride_c,
+            batch_count,
+        )
+        .result()
     }
 }
 
-// ----- L3: GEMM (type-erased ex form) -----
+/// # Safety: same as [`dgemm`] applied per batch element.
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn dgemm_strided_batched(
+    handle: sys::rocblas_handle,
+    transa: sys::rocblas_operation,
+    transb: sys::rocblas_operation,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
+    alpha: *const f64,
+    a: *const f64,
+    lda: sys::rocblas_int,
+    stride_a: sys::rocblas_stride,
+    b: *const f64,
+    ldb: sys::rocblas_int,
+    stride_b: sys::rocblas_stride,
+    beta: *const f64,
+    c: *mut f64,
+    ldc: sys::rocblas_int,
+    stride_c: sys::rocblas_stride,
+    batch_count: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe {
+        sys::rocblas_dgemm_strided_batched(
+            handle,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha,
+            a,
+            lda,
+            stride_a,
+            b,
+            ldb,
+            stride_b,
+            beta,
+            c,
+            ldc,
+            stride_c,
+            batch_count,
+        )
+        .result()
+    }
+}
 
+// ---------------------------------------------------------------------------
+// `_ex` mixed-precision GEMMs
+// ---------------------------------------------------------------------------
+
+/// Mixed-precision GEMM. Mirrors cudarc's `gemm_ex`.
+///
+/// **rocBLAS divergence:** `rocblas_gemm_ex` takes a fourth output
+/// buffer `d` (along with its layout `ldd` and type `d_type`), plus a
+/// trailing `solution_index: i32` and `flags: u32`. cuBLAS's
+/// `cublasGemmEx` doesn't have those — caller hands them in here.
+///
+/// Common usage: pass `c` and `d` to the same buffer with `c_type == d_type`
+/// and `ldc == ldd` for an in-place result; `solution_index = 0` and
+/// `flags = 0` to let rocBLAS pick.
+///
+/// # Safety
+/// - All device pointers must be valid for their declared types and strides.
+/// - `alpha` / `beta` follow the handle's pointer mode.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn gemm_ex(
-    h: sys::rocblas_handle,
+    handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
     transb: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    k: i32,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
     alpha: *const c_void,
-    a: u64,
+    a: *const c_void,
     a_type: sys::rocblas_datatype,
-    lda: i32,
-    b: u64,
+    lda: sys::rocblas_int,
+    b: *const c_void,
     b_type: sys::rocblas_datatype,
-    ldb: i32,
+    ldb: sys::rocblas_int,
     beta: *const c_void,
-    c: u64,
+    c: *const c_void,
     c_type: sys::rocblas_datatype,
-    ldc: i32,
-    d: u64,
+    ldc: sys::rocblas_int,
+    d: *mut c_void,
     d_type: sys::rocblas_datatype,
-    ldd: i32,
+    ldd: sys::rocblas_int,
     compute_type: sys::rocblas_datatype,
     algo: sys::rocblas_gemm_algo,
     solution_index: i32,
     flags: u32,
 ) -> Result<(), RocblasError> {
     unsafe {
-        check(sys::rocblas_gemm_ex(
-            h,
+        sys::rocblas_gemm_ex(
+            handle,
             transa,
             transb,
             m,
             n,
             k,
             alpha,
-            a as *const c_void,
+            a,
             a_type,
             lda,
-            b as *const c_void,
+            b,
             b_type,
             ldb,
             beta,
-            c as *const c_void,
+            c,
             c_type,
             ldc,
-            d as *mut c_void,
+            d,
             d_type,
             ldd,
             compute_type,
             algo,
             solution_index,
             flags,
-        ))
+        )
+        .result()
     }
 }
 
-// ----- L3: strided-batched GEMM -----
-
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn sgemm_strided_batched(
-    h: sys::rocblas_handle,
-    transa: sys::rocblas_operation,
-    transb: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    k: i32,
-    alpha: &f32,
-    a: u64,
-    lda: i32,
-    stride_a: i64,
-    b: u64,
-    ldb: i32,
-    stride_b: i64,
-    beta: &f32,
-    c: u64,
-    ldc: i32,
-    stride_c: i64,
-    batch_count: i32,
-) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_sgemm_strided_batched(
-            h,
-            transa,
-            transb,
-            m,
-            n,
-            k,
-            alpha,
-            a as *const f32,
-            lda,
-            stride_a,
-            b as *const f32,
-            ldb,
-            stride_b,
-            beta,
-            c as *mut f32,
-            ldc,
-            stride_c,
-            batch_count,
-        ))
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn dgemm_strided_batched(
-    h: sys::rocblas_handle,
-    transa: sys::rocblas_operation,
-    transb: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    k: i32,
-    alpha: &f64,
-    a: u64,
-    lda: i32,
-    stride_a: i64,
-    b: u64,
-    ldb: i32,
-    stride_b: i64,
-    beta: &f64,
-    c: u64,
-    ldc: i32,
-    stride_c: i64,
-    batch_count: i32,
-) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_dgemm_strided_batched(
-            h,
-            transa,
-            transb,
-            m,
-            n,
-            k,
-            alpha,
-            a as *const f64,
-            lda,
-            stride_a,
-            b as *const f64,
-            ldb,
-            stride_b,
-            beta,
-            c as *mut f64,
-            ldc,
-            stride_c,
-            batch_count,
-        ))
-    }
-}
-
+/// Strided-batched mixed-precision GEMM. Same shape as [`gemm_ex`] with
+/// per-buffer strides + a batch count.
+///
+/// # Safety: see [`gemm_ex`], applied per batch element.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn gemm_strided_batched_ex(
-    h: sys::rocblas_handle,
+    handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
     transb: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    k: i32,
+    m: sys::rocblas_int,
+    n: sys::rocblas_int,
+    k: sys::rocblas_int,
     alpha: *const c_void,
-    a: u64,
+    a: *const c_void,
     a_type: sys::rocblas_datatype,
-    lda: i32,
-    stride_a: i64,
-    b: u64,
+    lda: sys::rocblas_int,
+    stride_a: sys::rocblas_stride,
+    b: *const c_void,
     b_type: sys::rocblas_datatype,
-    ldb: i32,
-    stride_b: i64,
+    ldb: sys::rocblas_int,
+    stride_b: sys::rocblas_stride,
     beta: *const c_void,
-    c: u64,
+    c: *const c_void,
     c_type: sys::rocblas_datatype,
-    ldc: i32,
-    stride_c: i64,
-    d: u64,
+    ldc: sys::rocblas_int,
+    stride_c: sys::rocblas_stride,
+    d: *mut c_void,
     d_type: sys::rocblas_datatype,
-    ldd: i32,
-    stride_d: i64,
-    batch_count: i32,
+    ldd: sys::rocblas_int,
+    stride_d: sys::rocblas_stride,
+    batch_count: sys::rocblas_int,
     compute_type: sys::rocblas_datatype,
     algo: sys::rocblas_gemm_algo,
     solution_index: i32,
     flags: u32,
 ) -> Result<(), RocblasError> {
     unsafe {
-        check(sys::rocblas_gemm_strided_batched_ex(
-            h,
+        sys::rocblas_gemm_strided_batched_ex(
+            handle,
             transa,
             transb,
             m,
             n,
             k,
             alpha,
-            a as *const c_void,
+            a,
             a_type,
             lda,
             stride_a,
-            b as *const c_void,
+            b,
             b_type,
             ldb,
             stride_b,
             beta,
-            c as *const c_void,
+            c,
             c_type,
             ldc,
             stride_c,
-            d as *mut c_void,
+            d,
             d_type,
             ldd,
             stride_d,
@@ -334,260 +524,162 @@ pub unsafe fn gemm_strided_batched_ex(
             algo,
             solution_index,
             flags,
-        ))
+        )
+        .result()
     }
 }
 
-// ----- L2: GEMV -----
+// ---------------------------------------------------------------------------
+// L1 — reductions (asum / nrm2 / dot) and updates (axpy / scal / copy)
+// `result` for reductions follows the handle's pointer mode.
+// ---------------------------------------------------------------------------
 
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn sgemv(
-    h: sys::rocblas_handle,
-    trans: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    alpha: &f32,
-    a: u64,
-    lda: i32,
-    x: u64,
-    incx: i32,
-    beta: &f32,
-    y: u64,
-    incy: i32,
+/// # Safety: `x` must be valid for `n * incx` elements; `result` must
+/// point to one `f32` reachable per the handle's pointer mode.
+pub unsafe fn sasum(
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f32,
+    incx: sys::rocblas_int,
+    result: *mut f32,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_sgemv(
-            h,
-            trans,
-            m,
-            n,
-            alpha,
-            a as *const f32,
-            lda,
-            x as *const f32,
-            incx,
-            beta,
-            y as *mut f32,
-            incy,
-        ))
-    }
+    unsafe { sys::rocblas_sasum(handle, n, x, incx, result).result() }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn dgemv(
-    h: sys::rocblas_handle,
-    trans: sys::rocblas_operation,
-    m: i32,
-    n: i32,
-    alpha: &f64,
-    a: u64,
-    lda: i32,
-    x: u64,
-    incx: i32,
-    beta: &f64,
-    y: u64,
-    incy: i32,
+/// # Safety: see [`sasum`].
+pub unsafe fn dasum(
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f64,
+    incx: sys::rocblas_int,
+    result: *mut f64,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_dgemv(
-            h,
-            trans,
-            m,
-            n,
-            alpha,
-            a as *const f64,
-            lda,
-            x as *const f64,
-            incx,
-            beta,
-            y as *mut f64,
-            incy,
-        ))
-    }
+    unsafe { sys::rocblas_dasum(handle, n, x, incx, result).result() }
 }
 
-// ----- L1 -----
-
-pub unsafe fn saxpy(
-    h: sys::rocblas_handle,
-    n: i32,
-    alpha: &f32,
-    x: u64,
-    incx: i32,
-    y: u64,
-    incy: i32,
-) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_saxpy(
-            h,
-            n,
-            alpha,
-            x as *const f32,
-            incx,
-            y as *mut f32,
-            incy,
-        ))
-    }
-}
-
-pub unsafe fn daxpy(
-    h: sys::rocblas_handle,
-    n: i32,
-    alpha: &f64,
-    x: u64,
-    incx: i32,
-    y: u64,
-    incy: i32,
-) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_daxpy(
-            h,
-            n,
-            alpha,
-            x as *const f64,
-            incx,
-            y as *mut f64,
-            incy,
-        ))
-    }
-}
-
-pub unsafe fn sscal(
-    h: sys::rocblas_handle,
-    n: i32,
-    alpha: &f32,
-    x: u64,
-    incx: i32,
-) -> Result<(), RocblasError> {
-    unsafe { check(sys::rocblas_sscal(h, n, alpha, x as *mut f32, incx)) }
-}
-
-pub unsafe fn dscal(
-    h: sys::rocblas_handle,
-    n: i32,
-    alpha: &f64,
-    x: u64,
-    incx: i32,
-) -> Result<(), RocblasError> {
-    unsafe { check(sys::rocblas_dscal(h, n, alpha, x as *mut f64, incx)) }
-}
-
+/// # Safety: see [`sasum`].
 pub unsafe fn snrm2(
-    h: sys::rocblas_handle,
-    n: i32,
-    x: u64,
-    incx: i32,
-    result: u64,
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f32,
+    incx: sys::rocblas_int,
+    result: *mut f32,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_snrm2(
-            h,
-            n,
-            x as *const f32,
-            incx,
-            result as *mut f32,
-        ))
-    }
+    unsafe { sys::rocblas_snrm2(handle, n, x, incx, result).result() }
 }
 
+/// # Safety: see [`sasum`].
 pub unsafe fn dnrm2(
-    h: sys::rocblas_handle,
-    n: i32,
-    x: u64,
-    incx: i32,
-    result: u64,
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f64,
+    incx: sys::rocblas_int,
+    result: *mut f64,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_dnrm2(
-            h,
-            n,
-            x as *const f64,
-            incx,
-            result as *mut f64,
-        ))
-    }
+    unsafe { sys::rocblas_dnrm2(handle, n, x, incx, result).result() }
 }
 
+/// # Safety: `x` / `y` valid for `n` elements at the given strides;
+/// `result` follows the handle's pointer mode.
 pub unsafe fn sdot(
-    h: sys::rocblas_handle,
-    n: i32,
-    x: u64,
-    incx: i32,
-    y: u64,
-    incy: i32,
-    result: u64,
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f32,
+    incx: sys::rocblas_int,
+    y: *const f32,
+    incy: sys::rocblas_int,
+    result: *mut f32,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_sdot(
-            h,
-            n,
-            x as *const f32,
-            incx,
-            y as *const f32,
-            incy,
-            result as *mut f32,
-        ))
-    }
+    unsafe { sys::rocblas_sdot(handle, n, x, incx, y, incy, result).result() }
 }
 
+/// # Safety: see [`sdot`].
 pub unsafe fn ddot(
-    h: sys::rocblas_handle,
-    n: i32,
-    x: u64,
-    incx: i32,
-    y: u64,
-    incy: i32,
-    result: u64,
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f64,
+    incx: sys::rocblas_int,
+    y: *const f64,
+    incy: sys::rocblas_int,
+    result: *mut f64,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_ddot(
-            h,
-            n,
-            x as *const f64,
-            incx,
-            y as *const f64,
-            incy,
-            result as *mut f64,
-        ))
-    }
+    unsafe { sys::rocblas_ddot(handle, n, x, incx, y, incy, result).result() }
 }
 
+/// `y := alpha*x + y`.
+///
+/// # Safety: device pointers valid for `n` elements at the given strides.
+pub unsafe fn saxpy(
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    alpha: *const f32,
+    x: *const f32,
+    incx: sys::rocblas_int,
+    y: *mut f32,
+    incy: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe { sys::rocblas_saxpy(handle, n, alpha, x, incx, y, incy).result() }
+}
+
+/// # Safety: see [`saxpy`].
+pub unsafe fn daxpy(
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    alpha: *const f64,
+    x: *const f64,
+    incx: sys::rocblas_int,
+    y: *mut f64,
+    incy: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe { sys::rocblas_daxpy(handle, n, alpha, x, incx, y, incy).result() }
+}
+
+/// `x := alpha*x`.
+///
+/// # Safety: `x` valid for `n * incx` elements.
+pub unsafe fn sscal(
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    alpha: *const f32,
+    x: *mut f32,
+    incx: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe { sys::rocblas_sscal(handle, n, alpha, x, incx).result() }
+}
+
+/// # Safety: see [`sscal`].
+pub unsafe fn dscal(
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    alpha: *const f64,
+    x: *mut f64,
+    incx: sys::rocblas_int,
+) -> Result<(), RocblasError> {
+    unsafe { sys::rocblas_dscal(handle, n, alpha, x, incx).result() }
+}
+
+/// `y := x`.
+///
+/// # Safety: `x` / `y` valid for `n` elements at the given strides.
 pub unsafe fn scopy(
-    h: sys::rocblas_handle,
-    n: i32,
-    x: u64,
-    incx: i32,
-    y: u64,
-    incy: i32,
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f32,
+    incx: sys::rocblas_int,
+    y: *mut f32,
+    incy: sys::rocblas_int,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_scopy(
-            h,
-            n,
-            x as *const f32,
-            incx,
-            y as *mut f32,
-            incy,
-        ))
-    }
+    unsafe { sys::rocblas_scopy(handle, n, x, incx, y, incy).result() }
 }
 
+/// # Safety: see [`scopy`].
 pub unsafe fn dcopy(
-    h: sys::rocblas_handle,
-    n: i32,
-    x: u64,
-    incx: i32,
-    y: u64,
-    incy: i32,
+    handle: sys::rocblas_handle,
+    n: sys::rocblas_int,
+    x: *const f64,
+    incx: sys::rocblas_int,
+    y: *mut f64,
+    incy: sys::rocblas_int,
 ) -> Result<(), RocblasError> {
-    unsafe {
-        check(sys::rocblas_dcopy(
-            h,
-            n,
-            x as *const f64,
-            incx,
-            y as *mut f64,
-            incy,
-        ))
-    }
+    unsafe { sys::rocblas_dcopy(handle, n, x, incx, y, incy).result() }
 }
