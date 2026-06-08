@@ -57,12 +57,13 @@ impl EventWaitFlags {
 // HipContext
 // ----------------------------------------------------------------------------
 
-/// A HIP device + context, bundled together. Analogue of
-/// `cudarc::driver::safe::CudaContext`.
+/// A device-bound HIP session — the root that manufactures streams, events,
+/// and modules. Analogue of `cudarc::driver::safe::CudaContext`, but backed by
+/// the runtime device API (`hipSetDevice`) rather than the deprecated
+/// `hipCtx*` API: on HIP there's one (process-lifetime) primary context per
+/// device, so there's no context handle to own.
 ///
-/// Constructed via [`HipContext::new`] (primary context),
-/// [`HipContext::new_non_primary`] (independent context), or
-/// [`HipContext::from_raw_context`] (wraps an externally-owned handle).
+/// Constructed via [`HipContext::new`].
 ///
 /// Holds an `AtomicU32` deferred-error slot (`error_state`) so methods that
 /// run in `Drop` — where a `Result` can't bubble — can stash an error to be
@@ -70,10 +71,8 @@ impl EventWaitFlags {
 #[derive(Debug)]
 pub struct HipContext {
     pub(crate) hip_device: sys::hipDevice_t,
-    pub(crate) hip_ctx: sys::hipCtx_t,
     pub(crate) ordinal: usize,
     pub(crate) has_async_alloc: bool,
-    pub(crate) is_primary: bool,
     pub(crate) num_streams: AtomicUsize,
     pub(crate) event_tracking: AtomicBool,
     pub(crate) error_state: AtomicU32,
@@ -82,111 +81,35 @@ pub struct HipContext {
 unsafe impl Send for HipContext {}
 unsafe impl Sync for HipContext {}
 
-impl Drop for HipContext {
-    fn drop(&mut self) {
-        self.record_err(self.bind_to_thread());
-        let ctx = std::mem::replace(&mut self.hip_ctx, std::ptr::null_mut());
-        if !ctx.is_null() {
-            if self.is_primary {
-                self.record_err(result::primary_ctx::release(self.hip_device));
-            } else {
-                self.record_err(unsafe { sys::hipCtxDestroy(ctx).result() });
-            }
-        }
-    }
-}
-
 impl PartialEq for HipContext {
     fn eq(&self, other: &Self) -> bool {
-        self.hip_ctx == other.hip_ctx
+        self.ordinal == other.ordinal
     }
 }
 impl Eq for HipContext {}
 
 impl HipContext {
-    /// Retain and bind the device's primary context. Matches cudarc's
-    /// `CudaContext::new`.
+    /// Bind device `ordinal` to the calling thread. Mirror of cudarc's
+    /// `CudaContext::new`, but HIP-flavored: there's no context handle to
+    /// retain — `hipSetDevice` lazily uses the device's (process-lifetime)
+    /// primary context, so this is just `hipInit` + `hipSetDevice`.
     pub fn new(ordinal: usize) -> Result<Arc<Self>, HipError> {
         result::init()?;
         let hip_device = result::device::get(ordinal as i32)?;
-        let hip_ctx = result::primary_ctx::retain(hip_device)?;
         let has_async_alloc = result::device::get_attribute(
             hip_device,
             sys::hipDeviceAttribute_t::hipDeviceAttributeMemoryPoolsSupported,
         )? > 0;
         let ctx = Arc::new(HipContext {
             hip_device,
-            hip_ctx,
             ordinal,
             has_async_alloc,
-            is_primary: true,
             num_streams: AtomicUsize::new(0),
             event_tracking: AtomicBool::new(true),
             error_state: AtomicU32::new(0),
         });
         ctx.bind_to_thread()?;
         Ok(ctx)
-    }
-
-    /// Create an independent (non-primary) HIP context via
-    /// `hipCtxCreate`. On drop, destroyed via `hipCtxDestroy` instead of
-    /// `primary_ctx::release`.
-    ///
-    /// `flags` controls scheduling policy — pass `0` for defaults.
-    pub fn new_non_primary(ordinal: usize, flags: c_uint) -> Result<Arc<Self>, HipError> {
-        result::init()?;
-        let hip_device = result::device::get(ordinal as i32)?;
-        let hip_ctx = result::ctx::create(hip_device, flags)?;
-        let has_async_alloc = result::device::get_attribute(
-            hip_device,
-            sys::hipDeviceAttribute_t::hipDeviceAttributeMemoryPoolsSupported,
-        )? > 0;
-        let ctx = Arc::new(HipContext {
-            hip_device,
-            hip_ctx,
-            ordinal,
-            has_async_alloc,
-            is_primary: false,
-            num_streams: AtomicUsize::new(0),
-            event_tracking: AtomicBool::new(true),
-            error_state: AtomicU32::new(0),
-        });
-        ctx.bind_to_thread()?;
-        Ok(ctx)
-    }
-
-    /// Wraps an externally-owned `hipCtx_t`. Treated as non-primary (will be
-    /// destroyed via `hipCtxDestroy` on drop).
-    ///
-    /// # Safety
-    /// - `hip_device` must match the device `hip_ctx` was created on.
-    /// - Ownership of `hip_ctx` transfers to the returned `HipContext`;
-    ///   the caller must not destroy it themselves.
-    pub unsafe fn from_raw_context(
-        ordinal: usize,
-        hip_device: sys::hipDevice_t,
-        hip_ctx: sys::hipCtx_t,
-    ) -> Result<Arc<Self>, HipError> {
-        let has_async_alloc = result::device::get_attribute(
-            hip_device,
-            sys::hipDeviceAttribute_t::hipDeviceAttributeMemoryPoolsSupported,
-        )? > 0;
-        let ctx = Arc::new(HipContext {
-            hip_device,
-            hip_ctx,
-            ordinal,
-            has_async_alloc,
-            is_primary: false,
-            num_streams: AtomicUsize::new(0),
-            event_tracking: AtomicBool::new(true),
-            error_state: AtomicU32::new(0),
-        });
-        ctx.bind_to_thread()?;
-        Ok(ctx)
-    }
-
-    pub fn is_primary(&self) -> bool {
-        self.is_primary
     }
 
     pub fn has_async_alloc(&self) -> bool {
@@ -290,22 +213,16 @@ impl HipContext {
         self.hip_device
     }
 
-    /// Raw `hipCtx_t`. Do not destroy/release.
-    pub fn hip_ctx(&self) -> sys::hipCtx_t {
-        self.hip_ctx
-    }
-
-    /// Make `self.hip_ctx` the calling thread's current context. Key for
+    /// Bind this context's device (`self.ordinal`) to the calling thread via
+    /// `hipSetDevice` (skipping the call if it's already current). Key for
     /// thread safety — every HIP call below this layer assumes the right
-    /// context is bound.
+    /// device is bound.
     pub fn bind_to_thread(&self) -> Result<(), HipError> {
         self.check_err()?;
-        let needs_set = match result::ctx::get_current()? {
-            Some(curr) => curr != self.hip_ctx,
-            None => true,
-        };
-        if needs_set {
-            result::ctx::set_current(self.hip_ctx)?;
+        let mut curr: i32 = -1;
+        result::device::get_device(&mut curr)?;
+        if curr != self.ordinal as _ {
+            result::device::set_device(self.ordinal as _)?;
         }
         Ok(())
     }
@@ -317,7 +234,7 @@ impl HipContext {
 
     pub fn synchronize(&self) -> Result<(), HipError> {
         self.bind_to_thread()?;
-        result::ctx::synchronize()
+        result::device::synchronize()
     }
 
     /// Make subsequent [`Self::synchronize`] calls block the CPU thread by
@@ -344,12 +261,12 @@ impl HipContext {
 
     pub fn get_cache_config(&self) -> Result<sys::hipFuncCache_t, HipError> {
         self.bind_to_thread()?;
-        result::ctx::get_cache_config()
+        result::device::get_cache_config()
     }
 
     pub fn set_cache_config(&self, config: sys::hipFuncCache_t) -> Result<(), HipError> {
         self.bind_to_thread()?;
-        result::ctx::set_cache_config(config)
+        result::device::set_cache_config(config)
     }
 
     /// `true` once a non-default stream has been created in this context.
@@ -2039,8 +1956,8 @@ mod tests {
         let buf: HipSlice<f32> = stream_a.alloc_zeros(1024).unwrap();
 
         // Bind a (notionally) different context on this thread — for a
-        // single-GPU host, `new` retains the same primary context, but
-        // the bind_to_thread plumbing exercises the same code path.
+        // single-GPU host, `new` binds the same device, but the
+        // bind_to_thread plumbing exercises the same code path.
         let ctx_b = HipContext::new(0).unwrap();
         ctx_b.bind_to_thread().unwrap();
 
@@ -2118,50 +2035,8 @@ mod tests {
     }
 
     #[test]
-    fn test_primary_context_is_primary() {
+    fn test_context_htod_dtoh() {
         let ctx = HipContext::new(0).unwrap();
-        assert!(ctx.is_primary());
-    }
-
-    #[test]
-    fn test_from_raw_context_creates_and_destroys() {
-        result::init().unwrap();
-        let dev = result::device::get(0).unwrap();
-        let raw = result::primary_ctx::retain(dev).unwrap();
-        let ctx = unsafe { HipContext::from_raw_context(0, dev, raw).unwrap() };
-        // Drop the wrapper — it'll attempt a Destroy (non-primary path).
-        // The primary context was retained by `primary_ctx::retain`; we
-        // must release it ourselves once the wrapper is gone.
-        drop(ctx);
-        result::primary_ctx::release(dev).unwrap();
-    }
-
-    #[test]
-    fn test_from_raw_context_bind_to_thread() {
-        result::init().unwrap();
-        let dev = result::device::get(0).unwrap();
-        let raw = result::primary_ctx::retain(dev).unwrap();
-        let ctx = unsafe { HipContext::from_raw_context(0, dev, raw).unwrap() };
-        let ctx_for_thread = ctx.clone();
-        std::thread::spawn(move || {
-            ctx_for_thread.bind_to_thread().unwrap();
-        })
-        .join()
-        .unwrap();
-        ctx.bind_to_thread().unwrap();
-        drop(ctx);
-        result::primary_ctx::release(dev).unwrap();
-    }
-
-    #[test]
-    fn test_new_non_primary_creates_and_destroys() {
-        let ctx = HipContext::new_non_primary(0, 0).unwrap();
-        assert!(!ctx.is_primary());
-    }
-
-    #[test]
-    fn test_new_non_primary_htod_dtoh() {
-        let ctx = HipContext::new_non_primary(0, 0).unwrap();
         let stream = ctx.default_stream();
         let dev: HipSlice<f32> = stream.clone_htod(&[1.0_f32, 2.0, 3.0]).unwrap();
         let host: Vec<f32> = stream.clone_dtoh(&dev).unwrap();
@@ -2169,8 +2044,8 @@ mod tests {
     }
 
     #[test]
-    fn test_new_non_primary_cross_thread() {
-        let ctx = HipContext::new_non_primary(0, 0).unwrap();
+    fn test_context_cross_thread_bind() {
+        let ctx = HipContext::new(0).unwrap();
         let ctx_for_thread = ctx.clone();
         std::thread::spawn(move || {
             ctx_for_thread.bind_to_thread().unwrap();

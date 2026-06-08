@@ -115,14 +115,37 @@ pub mod device {
         Ok(dev)
     }
 
+    pub fn get_device(ordinal: *mut i32) -> Result<(), HipError> {
+        unsafe { sys::hipGetDevice(ordinal).result() }
+    } 
+
     /// Bind `ordinal` as the calling thread's current device. **rocmrc-only:**
     /// cudarc has no equivalent; CUDA forces callers through
     /// `ctx::set_current(CUcontext)`. HIP's runtime-API `hipSetDevice(int)`
     /// is the idiomatic AMD path and avoids the primary-context ceremony on
     /// a backend where `hipCtx_t` is largely vestigial.
     /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
-    pub fn set(ordinal: c_int) -> Result<(), HipError> {
+    pub fn set_device(ordinal: c_int) -> Result<(), HipError> {
         unsafe { sys::hipSetDevice(ordinal).result() }
+    }
+
+    /// Block until every op on the calling thread's current device completes.
+    /// Runtime-API counterpart to the deprecated `hipCtxSynchronize`.
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
+    pub fn synchronize() -> Result<(), HipError> {
+        unsafe { sys::hipDeviceSynchronize().result() }
+    }
+
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
+    pub fn get_cache_config() -> Result<sys::hipFuncCache_t, HipError> {
+        let mut config = sys::hipFuncCache_t::hipFuncCachePreferNone;
+        unsafe { sys::hipDeviceGetCacheConfig(&mut config).result()? };
+        Ok(config)
+    }
+
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
+    pub fn set_cache_config(config: sys::hipFuncCache_t) -> Result<(), HipError> {
+        unsafe { sys::hipDeviceSetCacheConfig(config).result() }
     }
 
     /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
@@ -410,75 +433,6 @@ pub mod occupancy {
             .result()?
         };
         Ok(bytes)
-    }
-}
-
-pub mod primary_ctx {
-    use super::{
-        sys::{self},
-        HipError,
-    };
-
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn retain(dev: sys::hipDevice_t) -> Result<sys::hipCtx_t, HipError> {
-        let mut ctx: sys::hipCtx_t = std::ptr::null_mut();
-        unsafe { sys::hipDevicePrimaryCtxRetain(&mut ctx, dev).result()? };
-        Ok(ctx)
-    }
-
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn release(dev: sys::hipDevice_t) -> Result<(), HipError> {
-        unsafe { sys::hipDevicePrimaryCtxRelease(dev).result() }
-    }
-}
-
-pub mod ctx {
-    use super::{
-        sys::{self},
-        HipError,
-    };
-    use core::ffi::c_uint;
-
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn create(
-        dev: sys::hipDevice_t,
-        flags: c_uint,
-    ) -> Result<sys::hipCtx_t, HipError> {
-        let mut ctx: sys::hipCtx_t = std::ptr::null_mut();
-        unsafe { sys::hipCtxCreate(&mut ctx, flags, dev).result()? };
-        Ok(ctx)
-    }
-
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn set_current(ctx: sys::hipCtx_t) -> Result<(), HipError> {
-        unsafe { sys::hipCtxSetCurrent(ctx).result() }
-    }
-
-    /// `None` when no context is current on the calling thread —
-    /// `hipCtxGetCurrent` reports this by writing a NULL handle through `pctx`.
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn get_current() -> Result<Option<sys::hipCtx_t>, HipError> {
-        let mut ctx: sys::hipCtx_t = std::ptr::null_mut();
-        unsafe { sys::hipCtxGetCurrent(&mut ctx).result()? };
-        Ok(if ctx.is_null() { None } else { Some(ctx) })
-    }
-
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn synchronize() -> Result<(), HipError> {
-        unsafe { sys::hipCtxSynchronize().result() }
-    }
-
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn get_cache_config() -> Result<sys::hipFuncCache_t, HipError> {
-        let mut config: sys::hipFuncCache_t =
-            sys::hipFuncCache_t::hipFuncCachePreferNone;
-        unsafe { sys::hipCtxGetCacheConfig(&mut config).result()? };
-        Ok(config)
-    }
-
-    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
-    pub fn set_cache_config(config: sys::hipFuncCache_t) -> Result<(), HipError> {
-        unsafe { sys::hipCtxSetCacheConfig(config).result() }
     }
 }
 
@@ -1252,7 +1206,7 @@ mod tests {
     #[test]
     fn peer_transfer_self() {
         init().unwrap();
-        device::set(0).unwrap();
+        device::set_device(0).unwrap();
 
         let bytes = 1024 * std::mem::size_of::<f32>();
         let src = malloc_sync(bytes).unwrap();
