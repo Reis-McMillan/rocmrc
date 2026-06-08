@@ -452,20 +452,27 @@ void k(float a, float b, float c, float d) {
 
     #[test]
     fn test_launch_with_8bit() {
+        // Unlike the 16/32/64-bit variants, this writes the received 1-byte
+        // args into an output buffer and checks host-side rather than using a
+        // device `assert`. A failed device assert here surfaces only as an
+        // opaque `hipErrorLaunchFailure`; capturing the values tells us whether
+        // 1-byte kernargs are actually mis-packed (a HIP/RDNA ABI quirk) or
+        // arrive intact.
         const SRC: &str = r#"
 extern "C" __global__
-void int_8bit(char s_min, char s_max, unsigned char u_min, unsigned char u_max) {
+void int_8bit(char s_min, char s_max, unsigned char u_min, unsigned char u_max, int* out) {
     if (threadIdx.x == 0) {
-        assert(s_min == -128);
-        assert(s_max == 127);
-        assert(u_min == 0);
-        assert(u_max == 255);
+        out[0] = (int)s_min;
+        out[1] = (int)s_max;
+        out[2] = (int)u_min;
+        out[3] = (int)u_max;
     }
 }
 "#;
         let (ctx, f) = compile(SRC, "int_8bit");
         let stream = ctx.default_stream();
         let (s_min, s_max, u_min, u_max) = (i8::MIN, i8::MAX, u8::MIN, u8::MAX);
+        let mut out: HipSlice<i32> = stream.alloc_zeros(4).unwrap();
         let cfg = LaunchConfig {
             grid_dim: (1, 1, 1),
             block_dim: (1, 1, 1),
@@ -478,10 +485,12 @@ void int_8bit(char s_min, char s_max, unsigned char u_min, unsigned char u_max) 
                 .arg(&s_max)
                 .arg(&u_min)
                 .arg(&u_max)
+                .arg(&mut out)
                 .launch(cfg)
                 .unwrap();
         }
-        stream.synchronize().unwrap();
+        let got: Vec<i32> = stream.clone_dtoh(&out).unwrap();
+        assert_eq!(got, vec![-128, 127, 0, 255], "1-byte kernargs round-trip");
     }
 
     #[test]

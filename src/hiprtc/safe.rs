@@ -157,6 +157,17 @@ pub fn compile_hsaco_with_opts<S: AsRef<str>>(
     if opts.arch.is_none() {
         opts.arch = Some(gfx_version.as_str().to_string());
     }
+    // hipRTC's default header search path doesn't cover ROCm's own headers, so
+    // kernels that `#include <hip/...>` (e.g. `hip_fp16.h` for `__half`) fail
+    // with "file not found". Add `$ROCM_PATH/include` (default `/opt/rocm`)
+    // unless the caller already supplied it.
+    let rocm_include = {
+        let root = std::env::var("ROCM_PATH").unwrap_or_else(|_| "/opt/rocm".to_string());
+        format!("{root}/include")
+    };
+    if !opts.include_paths.iter().any(|p| *p == rocm_include) {
+        opts.include_paths.push(rocm_include);
+    }
     let prog = Program::create(src, opts.name.as_deref())?;
     prog.compile(gfx_version, opts)
 }
