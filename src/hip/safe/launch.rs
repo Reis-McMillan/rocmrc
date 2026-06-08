@@ -296,10 +296,18 @@ mod tests {
     use crate::hip::safe::{HipContext, HipSlice};
     use crate::hiprtc;
 
+    // These kernels are ported from cudarc, where NVRTC provides a device
+    // `assert`. hipRTC does not, so define one: a failed assertion traps,
+    // which surfaces as a HIP error on the next stream sync (exactly what
+    // `test_device_side_assert` relies on). Prepended to every test kernel.
+    const ASSERT_PRELUDE: &str =
+        "#define assert(cond) do { if (!(cond)) __builtin_trap(); } while (0)\n";
+
     fn compile(src: &str, name: &str) -> (std::sync::Arc<crate::hip::safe::HipContext>, crate::hip::safe::HipFunction) {
         let ctx = HipContext::new(0).unwrap();
         let gfx = ctx.gfx_version().expect("unsupported gfx arch");
-        let hsaco = hiprtc::compile_hsaco(src, gfx).expect("hipRTC compile");
+        let full_src = format!("{ASSERT_PRELUDE}{src}");
+        let hsaco = hiprtc::compile_hsaco(&full_src, gfx).expect("hipRTC compile");
         let module = ctx.load_module(hsaco).unwrap();
         let f = module.load_function(name).unwrap();
         (ctx, f)
