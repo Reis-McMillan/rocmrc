@@ -804,6 +804,8 @@ void slow_worker(int* out) {
     }
 
     #[test]
+    #[ignore = "must be executed by itself: the device-side assert faults the \
+                device, poisoning every other test sharing it"]
     fn test_device_side_assert() {
         const SRC: &str = r#"
 extern "C" __global__
