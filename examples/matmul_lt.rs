@@ -6,11 +6,8 @@
 //! Run (pick any rocm-XYYYY feature matching the installed ROCm version):
 //!   ROCM_PATH=/opt/rocm cargo run --features hipblaslt,rocm-07021 --example matmul_lt
 
-use rocmrc::hip::{HipContext, HipSlice};
-use rocmrc::hipblaslt::{
-    HipBlasLt, MatmulDesc, MatmulPref, MatrixLayout,
-    hipDataType, hipblasComputeType_t, hipblasLtEpilogue_t, hipblasOperation_t,
-};
+use rocmrc::hip::HipContext;
+use rocmrc::hipblaslt::{Activation, HipBlasLT, Matmul, MatmulConfig};
 
 fn main() {
     let ctx = HipContext::new(0).expect("HipContext");
@@ -33,65 +30,44 @@ fn main() {
 
     let d_a = stream.clone_htod(&a_host).unwrap();
     let d_b = stream.clone_htod(&b_host).unwrap();
-    let d_c: HipSlice<f32> = ctx.alloc(M * N).unwrap(); // unused (beta=0) but layout requires a valid ptr
-    let d_d: HipSlice<f32> = ctx.alloc(M * N).unwrap();
     let d_bias = stream.clone_htod(&bias_host).unwrap();
+    let mut d_out = stream.alloc_zeros::<f32>(M * N).unwrap();
 
-    // ----- hipBLASLt setup -----
-    let lt = HipBlasLt::new(stream.clone()).expect("HipBlasLt");
+    // ----- hipBLASLt setup (workspace + algo heuristic are handled internally) -----
+    let blas = HipBlasLT::new(stream.clone()).expect("HipBlasLT");
 
-    let a_layout = MatrixLayout::new(hipDataType::HIP_R_32F, M as u64, K as u64, M as i64).unwrap();
-    let b_layout = MatrixLayout::new(hipDataType::HIP_R_32F, K as u64, N as u64, K as i64).unwrap();
-    let c_layout = MatrixLayout::new(hipDataType::HIP_R_32F, M as u64, N as u64, M as i64).unwrap();
-    let d_layout = MatrixLayout::new(hipDataType::HIP_R_32F, M as u64, N as u64, M as i64).unwrap();
-
-    let mut desc = MatmulDesc::new(
-        hipblasComputeType_t::HIPBLAS_COMPUTE_32F,
-        hipDataType::HIP_R_32F,
-    )
-    .unwrap();
-    desc.set_transa(hipblasOperation_t::HIPBLAS_OP_N).unwrap();
-    desc.set_transb(hipblasOperation_t::HIPBLAS_OP_N).unwrap();
-    desc.set_epilogue(hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_RELU_BIAS).unwrap();
-    desc.set_bias_pointer(d_bias.device_ptr(&stream).0).unwrap();
-    desc.set_bias_dtype(hipDataType::HIP_R_32F).unwrap();
-
-    let mut pref = MatmulPref::new().unwrap();
-    pref.set_max_workspace_bytes(32 * 1024 * 1024).unwrap(); // 32 MB
-
-    let heuristics = lt
-        .get_heuristic(&desc, &a_layout, &b_layout, &c_layout, &d_layout, &pref, 4)
-        .expect("get_heuristic");
-    assert!(!heuristics.is_empty(), "no algos returned");
-    let best = &heuristics[0];
-    println!("chose algo, workspace_required = {} bytes", best.workspace_required());
-
-    let workspace: HipSlice<u8> = ctx.alloc(best.workspace_required().max(1)).unwrap();
-    let alpha: f32 = 1.0;
-    let beta: f32 = 0.0;
-
+    // The data is already column-major, so no arg-swap is needed: hipBLASLt is
+    // column-major natively. D = ReLU(A * B + bias).
+    let cfg = MatmulConfig {
+        transa: false,
+        transb: false,
+        m: M as u64,
+        n: N as u64,
+        k: K as u64,
+        alpha: 1.0,
+        lda: M as i64,
+        ldb: K as i64,
+        beta: 0.0,
+        ldc: M as i64,
+        stride_a: None,
+        stride_b: None,
+        stride_c: None,
+        batch_size: None,
+    };
     unsafe {
-        lt.matmul(
-            &desc,
-            &alpha as *const _ as *const std::ffi::c_void,
-            d_a.device_ptr(&stream).0,
-            &a_layout,
-            d_b.device_ptr(&stream).0,
-            &b_layout,
-            &beta as *const _ as *const std::ffi::c_void,
-            d_c.device_ptr(&stream).0,
-            &c_layout,
-            d_d.device_ptr(&stream).0,
-            &d_layout,
-            best,
-            workspace.device_ptr(&stream).0,
-            best.workspace_required(),
+        blas.matmul(
+            cfg,
+            &d_a,
+            &d_b,
+            &mut d_out,
+            Some(&d_bias),
+            Some(&Activation::Relu),
         )
         .expect("matmul");
     }
 
     // ----- pull D back -----
-    let d_got = stream.clone_dtoh(&d_d).expect("dtoh");
+    let d_got = stream.clone_dtoh(&d_out).expect("dtoh");
 
     // ----- CPU reference: D[i,j] = ReLU( sum_k A[i,k] * B[k,j] + bias[i] ) -----
     let mut max_err = 0f32;
@@ -101,8 +77,7 @@ fn main() {
             for k in 0..K {
                 acc += a_host[k * M + i] * b_host[j * K + k];
             }
-            let with_bias = acc + bias_host[i];
-            let relu = with_bias.max(0.0);
+            let relu = (acc + bias_host[i]).max(0.0);
             let got = d_got[j * M + i];
             max_err = max_err.max((got - relu).abs());
         }

@@ -1,5 +1,5 @@
 //! Toggle HIP profile collection from within a process. Mirrors
-//! [`cudarc::driver::safe::profile`]. Pair with `rocprof` (or any tool
+//! `cudarc::driver::safe::profile`. Pair with `rocprof` (or any tool
 //! consuming `hipProfilerStart` / `hipProfilerStop`) to bracket the hot
 //! path you want recorded.
 

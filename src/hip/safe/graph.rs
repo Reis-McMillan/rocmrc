@@ -1,5 +1,5 @@
 //! Replay-able HIP graphs via stream capture. Mirrors
-//! [`cudarc::driver::safe::graph`].
+//! `cudarc::driver::safe::graph`.
 
 use std::sync::Arc;
 

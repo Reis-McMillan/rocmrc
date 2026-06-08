@@ -1,5 +1,5 @@
 //! HIP unified (managed) memory. Mirrors
-//! [`cudarc::driver::safe::unified_memory`].
+//! `cudarc::driver::safe::unified_memory`.
 //!
 //! Allocated via [`HipContext::alloc_unified`] (which wraps
 //! `hipMallocManaged`). The returned [`HipUnifiedSlice`] is addressable
@@ -26,13 +26,13 @@ use super::{
 
 // HIP `#define` flag values that bindgen drops. Re-declared with the same
 // hex constants used in `<hip/hip_runtime_api.h>`.
-const HIP_MEM_ATTACH_GLOBAL: std::ffi::c_uint = 0x1;
-const HIP_MEM_ATTACH_HOST: std::ffi::c_uint = 0x2;
-const HIP_MEM_ATTACH_SINGLE: std::ffi::c_uint = 0x4;
+const HIP_MEM_ATTACH_GLOBAL: core::ffi::c_uint = 0x1;
+const HIP_MEM_ATTACH_HOST: core::ffi::c_uint = 0x2;
+const HIP_MEM_ATTACH_SINGLE: core::ffi::c_uint = 0x4;
 
 // `hipCpuDeviceId` is `#define hipCpuDeviceId ((int)-1)` — bindgen drops
 // the macro, so we redeclare with the same value.
-const HIP_CPU_DEVICE_ID: std::ffi::c_int = -1;
+const HIP_CPU_DEVICE_ID: core::ffi::c_int = -1;
 
 /// Attach mode for a [`HipUnifiedSlice`]. Mirrors HIP's
 /// `hipMemAttachGlobal` / `Host` / `Single` flag triple, which are
@@ -51,7 +51,7 @@ pub enum MemAttachFlags {
 
 impl MemAttachFlags {
     #[inline]
-    fn to_raw(self) -> std::ffi::c_uint {
+    fn to_raw(self) -> core::ffi::c_uint {
         match self {
             Self::Global => HIP_MEM_ATTACH_GLOBAL,
             Self::Host => HIP_MEM_ATTACH_HOST,
@@ -65,7 +65,7 @@ impl MemAttachFlags {
 // ----------------------------------------------------------------------------
 
 /// Unified memory buffer. Analogue of
-/// [`cudarc::driver::safe::UnifiedSlice`].
+/// `cudarc::driver::safe::UnifiedSlice`.
 ///
 /// Allocated by [`HipContext::alloc_unified`] (wraps `hipMallocManaged`)
 /// and freed on drop via `hipFree`. Holds a blocking-sync [`HipEvent`]
@@ -235,7 +235,7 @@ impl<T> HipUnifiedSlice<T> {
                 if !self.concurrent_managed_access {
                     return Err(HipError(sys::hipError_t::hipErrorNotSupported));
                 }
-                self.stream.context().ordinal() as std::ffi::c_int
+                self.stream.context().ordinal() as core::ffi::c_int
             }
             MemAttachFlags::Host => HIP_CPU_DEVICE_ID,
         };

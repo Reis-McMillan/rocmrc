@@ -2,8 +2,8 @@
 //!
 //! HIP intentionally unifies what CUDA splits across two distinct libraries:
 //! the **driver API** (`cu*`, opaque handles, `cuda.h` — wrapped by
-//! [`cudarc::driver::result`]) and the **runtime API** (`cuda*`, int
-//! ordinals, `cuda_runtime.h` — wrapped by [`cudarc::runtime::result`]).
+//! `cudarc::driver::result`) and the **runtime API** (`cuda*`, int
+//! ordinals, `cuda_runtime.h` — wrapped by `cudarc::runtime::result`).
 //! HIP collapses both into one header with no usage rule preventing you from
 //! mixing styles — `hipMalloc` (runtime-flavored) and `hipModuleLaunchKernel`
 //! (driver-flavored) are first-class siblings. So this single `hip::result`
@@ -24,9 +24,11 @@
 //!   setters take a host `__global__` symbol pointer rather than a
 //!   `hipFunction_t`, and are unreachable from `hipModuleGetFunction`
 //!   handles. See the [`function`] module doc.
+//!
+//! See the [HIP Runtime API reference](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
 
 pub use super::{sys};
-use std::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 
 
 pub struct HipError(pub sys::hipError_t);
@@ -68,6 +70,7 @@ impl std::fmt::Display for HipError {
 
 impl std::error::Error for HipError {}
 
+/// See [HIP Runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
 pub fn init() -> Result<(), HipError> {
     unsafe { sys::hipInit(0).result() }
 }
@@ -77,9 +80,10 @@ pub mod version {
         sys::{self},
         HipError,
     };
-    use std::ffi::c_int;
+    use core::ffi::c_int;
 
     /// The HIP driver API version (e.g. `60304000` for 6.3.4).
+    /// See [HIP Runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
     pub fn driver() -> Result<i32, HipError> {
         let mut v: c_int = 0;
         unsafe { sys::hipDriverGetVersion(&mut v).result()? };
@@ -87,6 +91,7 @@ pub mod version {
     }
 
     /// The HIP runtime API version. On HIP these often equal [`driver`].
+    /// See [HIP Runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
     pub fn runtime() -> Result<i32, HipError> {
         let mut v: c_int = 0;
         unsafe { sys::hipRuntimeGetVersion(&mut v).result()? };
@@ -99,11 +104,11 @@ pub mod device {
         sys::{self},
         HipError,
     };
-    use std::{
-        ffi::{c_int, c_uint, CStr},
-        string::String,
-    };
+    use core::ffi::{c_int, c_uint, CStr};
+    use core::mem::MaybeUninit;
+    use std::string::String;
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get(ordinal: c_int) -> Result<sys::hipDevice_t, HipError> {
         let mut dev: sys::hipDevice_t = 0;
         unsafe { sys::hipDeviceGet(&mut dev, ordinal).result()? };
@@ -115,22 +120,26 @@ pub mod device {
     /// `ctx::set_current(CUcontext)`. HIP's runtime-API `hipSetDevice(int)`
     /// is the idiomatic AMD path and avoids the primary-context ceremony on
     /// a backend where `hipCtx_t` is largely vestigial.
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn set(ordinal: c_int) -> Result<(), HipError> {
         unsafe { sys::hipSetDevice(ordinal).result() }
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_count() -> Result<c_int, HipError> {
         let mut n: c_int = 0;
         unsafe { sys::hipGetDeviceCount(&mut n).result()? };
         Ok(n)
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn total_mem(dev: sys::hipDevice_t) -> Result<usize, HipError> {
         let mut bytes: usize = 0;
         unsafe { sys::hipDeviceTotalMem(&mut bytes, dev).result()? };
         Ok(bytes)
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_attribute(
         dev: sys::hipDevice_t,
         attr: sys::hipDeviceAttribute_t,
@@ -140,6 +149,7 @@ pub mod device {
         Ok(val)
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_name(dev: sys::hipDevice_t) -> Result<String, HipError> {
         let mut buf = [0 as core::ffi::c_char; 256];
         unsafe {
@@ -149,24 +159,28 @@ pub mod device {
         Ok(cstr.to_string_lossy().into_owned())
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_uuid(dev: sys::hipDevice_t) -> Result<sys::hipUUID, HipError> {
-        let mut uuid: sys::hipUUID = unsafe { std::mem::zeroed() };
-        unsafe { sys::hipDeviceGetUuid(&mut uuid, dev).result()? };
-        Ok(uuid)
+        let mut uuid = MaybeUninit::uninit();
+        unsafe { sys::hipDeviceGetUuid(uuid.as_mut_ptr(), dev).result()? };
+        Ok(unsafe { uuid.assume_init() })
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_default_mem_pool(dev: sys::hipDevice_t) -> Result<sys::hipMemPool_t, HipError> {
         let mut mem_pool: sys::hipMemPool_t = std::ptr::null_mut();
         unsafe { sys::hipDeviceGetDefaultMemPool(&mut mem_pool, dev).result()? };
         Ok(mem_pool)
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_mem_pool(dev: sys::hipDevice_t) -> Result<sys::hipMemPool_t, HipError> {
         let mut mem_pool: sys::hipMemPool_t = std::ptr::null_mut();
         unsafe { sys::hipDeviceGetMemPool(&mut mem_pool, dev).result()? };
         Ok(mem_pool)
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn set_mem_pool(
         dev: sys::hipDevice_t,
         mem_pool: sys::hipMemPool_t,
@@ -176,12 +190,14 @@ pub mod device {
 
     /// HIP scopes limits to the device, not a context (cudarc's
     /// `ctx::get_limit` / `set_limit` live here instead).
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_limit(limit: sys::hipLimit_t) -> Result<usize, HipError> {
         let mut value: usize = 0;
         unsafe { sys::hipDeviceGetLimit(&mut value, limit).result()? };
         Ok(value)
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn set_limit(limit: sys::hipLimit_t, value: usize) -> Result<(), HipError> {
         unsafe { sys::hipDeviceSetLimit(limit, value).result() }
     }
@@ -189,6 +205,7 @@ pub mod device {
     /// The ordinal of the device currently bound to the calling thread.
     /// Wraps `hipGetDevice`. (Note the asymmetry with [`get`], which
     /// resolves an ordinal to a `hipDevice_t` handle.)
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn current() -> Result<c_int, HipError> {
         let mut ordinal: c_int = 0;
         unsafe { sys::hipGetDevice(&mut ordinal).result()? };
@@ -203,6 +220,7 @@ pub mod device {
     /// Pending work, live allocations, modules, streams, and events on
     /// the current device are *invalidated*. Caller must ensure nothing
     /// downstream tries to use them after this returns.
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub unsafe fn reset() -> Result<(), HipError> {
         unsafe { sys::hipDeviceReset().result() }
     }
@@ -210,17 +228,20 @@ pub mod device {
     /// Full device property struct (versioned R0600 layout). Wraps
     /// `hipGetDevicePropertiesR0600`. The struct is large; prefer
     /// [`get_attribute`] for single-field queries on hot paths.
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_properties(ordinal: c_int) -> Result<sys::hipDeviceProp_tR0600, HipError> {
-        let mut prop: sys::hipDeviceProp_tR0600 = unsafe { std::mem::zeroed() };
-        unsafe { sys::hipGetDevicePropertiesR0600(&mut prop, ordinal).result()? };
-        Ok(prop)
+        let mut prop = MaybeUninit::uninit();
+        unsafe { sys::hipGetDevicePropertiesR0600(prop.as_mut_ptr(), ordinal).result()? };
+        Ok(unsafe { prop.assume_init() })
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn enable_peer_access(peer_id: c_int, flags: c_uint) -> Result<(), HipError> {
         unsafe { sys::hipDeviceEnablePeerAccess(peer_id, flags).result()? };
         Ok(())
     }
 
+    /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn can_access_peer(
         device_id: c_int,
         peer_id: c_int
@@ -259,9 +280,10 @@ pub mod function {
         sys::{self, hipFunction_attribute},
         HipError,
     };
-    use std::ffi::c_int;
+    use core::ffi::c_int;
 
     /// Driver-API read against a launched `hipFunction_t`.
+    /// See [HIP Execution Control docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___execution.html).
     pub fn get_function_attribute(
         f: sys::hipFunction_t,
         attribute: hipFunction_attribute,
@@ -277,8 +299,9 @@ pub mod occupancy {
         sys::{self},
         HipError,
     };
-    use std::ffi::{c_int, c_uint, c_void};
+    use core::ffi::{c_int, c_uint, c_void};
 
+    /// See [HIP Occupancy docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___occupancy.html).
     pub fn max_active_blocks_per_multiprocessor(
         f: sys::hipFunction_t,
         block_size: c_int,
@@ -297,6 +320,7 @@ pub mod occupancy {
         Ok(n)
     }
 
+    /// See [HIP Occupancy docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___occupancy.html).
     pub fn max_active_blocks_per_multiprocessor_with_flags(
         f: sys::hipFunction_t,
         block_size: c_int,
@@ -319,6 +343,7 @@ pub mod occupancy {
 
     /// Returns `(min_grid_size, block_size)` — the smallest grid that saturates
     /// the device and the block size that achieves it.
+    /// See [HIP Occupancy docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___occupancy.html).
     pub fn max_potential_block_size(
         f: sys::hipFunction_t,
         dynamic_smem_bytes: usize,
@@ -339,6 +364,7 @@ pub mod occupancy {
         Ok((grid, block))
     }
 
+    /// See [HIP Occupancy docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___occupancy.html).
     pub fn max_potential_block_size_with_flags(
         f: sys::hipFunction_t,
         dynamic_smem_bytes: usize,
@@ -367,6 +393,7 @@ pub mod occupancy {
     ///
     /// # Safety
     /// `f` must be a valid pointer to a HIP `__global__` symbol.
+    /// See [HIP Occupancy docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___occupancy.html).
     pub unsafe fn available_dynamic_shared_mem_per_block(
         f: *const c_void,
         num_blocks: c_int,
@@ -392,12 +419,14 @@ pub mod primary_ctx {
         HipError,
     };
 
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn retain(dev: sys::hipDevice_t) -> Result<sys::hipCtx_t, HipError> {
         let mut ctx: sys::hipCtx_t = std::ptr::null_mut();
         unsafe { sys::hipDevicePrimaryCtxRetain(&mut ctx, dev).result()? };
         Ok(ctx)
     }
 
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn release(dev: sys::hipDevice_t) -> Result<(), HipError> {
         unsafe { sys::hipDevicePrimaryCtxRelease(dev).result() }
     }
@@ -408,8 +437,9 @@ pub mod ctx {
         sys::{self},
         HipError,
     };
-    use std::ffi::c_uint;
+    use core::ffi::c_uint;
 
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn create(
         dev: sys::hipDevice_t,
         flags: c_uint,
@@ -419,22 +449,26 @@ pub mod ctx {
         Ok(ctx)
     }
 
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn set_current(ctx: sys::hipCtx_t) -> Result<(), HipError> {
         unsafe { sys::hipCtxSetCurrent(ctx).result() }
     }
 
     /// `None` when no context is current on the calling thread —
     /// `hipCtxGetCurrent` reports this by writing a NULL handle through `pctx`.
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn get_current() -> Result<Option<sys::hipCtx_t>, HipError> {
         let mut ctx: sys::hipCtx_t = std::ptr::null_mut();
         unsafe { sys::hipCtxGetCurrent(&mut ctx).result()? };
         Ok(if ctx.is_null() { None } else { Some(ctx) })
     }
 
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn synchronize() -> Result<(), HipError> {
         unsafe { sys::hipCtxSynchronize().result() }
     }
 
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn get_cache_config() -> Result<sys::hipFuncCache_t, HipError> {
         let mut config: sys::hipFuncCache_t =
             sys::hipFuncCache_t::hipFuncCachePreferNone;
@@ -442,6 +476,7 @@ pub mod ctx {
         Ok(config)
     }
 
+    /// See [HIP Context Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___context.html).
     pub fn set_cache_config(config: sys::hipFuncCache_t) -> Result<(), HipError> {
         unsafe { sys::hipCtxSetCacheConfig(config).result() }
     }
@@ -452,9 +487,9 @@ pub mod stream {
         sys::{self},
         HipError,
     };
-    use std::ffi::{c_int, c_uint};
+    use core::ffi::{c_int, c_uint};
 
-    /// Stream-creation flag. Mirrors [`cudarc::driver::result::stream::StreamKind`]
+    /// Stream-creation flag. Mirrors `cudarc::driver::result::stream::StreamKind`
     /// (and the runtime parallel). HIP exposes the underlying values as
     /// `#define`s (`hipStreamDefault = 0x0`, `hipStreamNonBlocking = 0x1`)
     /// which bindgen drops — same precedent as `EventWaitFlags` /
@@ -471,6 +506,7 @@ pub mod stream {
 
     impl StreamKind {
         #[inline]
+        /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
         pub fn to_raw(self) -> c_uint {
             match self {
                 Self::Default => 0x0,
@@ -479,12 +515,14 @@ pub mod stream {
         }
     }
 
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub fn create(kind: StreamKind) -> Result<sys::hipStream_t, HipError> {
         let mut s: sys::hipStream_t = std::ptr::null_mut();
         unsafe { sys::hipStreamCreateWithFlags(&mut s, kind.to_raw()).result()? };
         Ok(s)
     }
 
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub fn create_with_priority(
         kind: StreamKind,
         priority: c_int,
@@ -496,10 +534,12 @@ pub mod stream {
         Ok(s)
     }
 
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub fn destroy(s: sys::hipStream_t) -> Result<(), HipError> {
         unsafe { sys::hipStreamDestroy(s).result() }
     }
 
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub fn synchronize(s: sys::hipStream_t) -> Result<(), HipError> {
         unsafe { sys::hipStreamSynchronize(s).result() }
     }
@@ -513,6 +553,7 @@ pub mod stream {
     ///
     /// # Safety
     /// `s` and `event` must both be live (not destroyed).
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub unsafe fn wait_event(
         s: sys::hipStream_t,
         event: sys::hipEvent_t,
@@ -524,6 +565,7 @@ pub mod stream {
     /// `Ok(true)` if every prior op on `s` has completed; `Ok(false)` if work
     /// is still pending (HIP signals this via `hipErrorNotReady`, which we map
     /// to a boolean rather than a `HipError`).
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub fn query(s: sys::hipStream_t) -> Result<bool, HipError> {
         match unsafe { sys::hipStreamQuery(s) } {
             sys::hipError_t::hipSuccess => Ok(true),
@@ -532,12 +574,14 @@ pub mod stream {
         }
     }
 
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub fn get_flags(s: sys::hipStream_t) -> Result<c_uint, HipError> {
         let mut flags: c_uint = 0;
         unsafe { sys::hipStreamGetFlags(s, &mut flags).result()? };
         Ok(flags)
     }
 
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub fn get_priority(s: sys::hipStream_t) -> Result<c_int, HipError> {
         let mut p: c_int = 0;
         unsafe { sys::hipStreamGetPriority(s, &mut p).result()? };
@@ -549,6 +593,7 @@ pub mod stream {
     /// # Safety
     /// `s` must be a live, non-default stream. `mode` controls how
     /// blocking sub-operations are diverted (Global / ThreadLocal / Relaxed).
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub unsafe fn begin_capture(
         s: sys::hipStream_t,
         mode: sys::hipStreamCaptureMode,
@@ -561,6 +606,7 @@ pub mod stream {
     ///
     /// # Safety
     /// `s` must currently be capturing.
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub unsafe fn end_capture(s: sys::hipStream_t) -> Result<sys::hipGraph_t, HipError> {
         let mut graph: sys::hipGraph_t = std::ptr::null_mut();
         unsafe { sys::hipStreamEndCapture(s, &mut graph).result()? };
@@ -569,6 +615,7 @@ pub mod stream {
 
     /// # Safety
     /// `s` must be a live stream handle.
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub unsafe fn is_capturing(
         s: sys::hipStream_t,
     ) -> Result<sys::hipStreamCaptureStatus, HipError> {
@@ -585,6 +632,7 @@ pub mod stream {
     /// is rejected by HIP). `flags` is one of
     /// `hipMemAttachGlobal` (0x1), `hipMemAttachHost` (0x2), or
     /// `hipMemAttachSingle` (0x4).
+    /// See [HIP Stream Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___stream.html).
     pub unsafe fn attach_mem_async(
         s: sys::hipStream_t,
         dev_ptr: u64,
@@ -592,7 +640,7 @@ pub mod stream {
         flags: c_uint,
     ) -> Result<(), HipError> {
         unsafe {
-            sys::hipStreamAttachMemAsync(s, dev_ptr as *mut std::ffi::c_void, length, flags)
+            sys::hipStreamAttachMemAsync(s, dev_ptr as *mut core::ffi::c_void, length, flags)
                 .result()
         }
     }
@@ -603,6 +651,7 @@ pub mod stream {
 // in a submodule; this section follows that convention.
 // ----------------------------------------------------------------------------
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn malloc_sync(num_bytes: usize) -> Result<u64, HipError> {
     let mut p: *mut c_void = std::ptr::null_mut();
     unsafe { sys::hipMalloc(&mut p, num_bytes).result()? };
@@ -611,12 +660,14 @@ pub fn malloc_sync(num_bytes: usize) -> Result<u64, HipError> {
 
 /// Allocates from the device's mempool. Requires `memoryPoolsSupported` to be
 /// advertised on the device. Pair with [`free_async`] to stay stream-ordered.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn malloc_async(num_bytes: usize, stream: sys::hipStream_t) -> Result<u64, HipError> {
     let mut p: *mut c_void = std::ptr::null_mut();
     unsafe { sys::hipMallocAsync(&mut p, num_bytes, stream).result()? };
     Ok(p as u64)
 }
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn malloc_managed(num_bytes: usize, flags: c_uint) -> Result<u64, HipError> {
     let mut p: *mut c_void = std::ptr::null_mut();
     unsafe { sys::hipMallocManaged(&mut p, num_bytes, flags).result()? };
@@ -625,20 +676,24 @@ pub fn malloc_managed(num_bytes: usize, flags: c_uint) -> Result<u64, HipError> 
 
 /// Pinned host allocation. **HIP discrepancy:** the HIP entry is
 /// `hipHostMalloc`, the symmetric counterpart of CUDA's `cuMemAllocHost`.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn malloc_host(num_bytes: usize, flags: c_uint) -> Result<*mut c_void, HipError> {
     let mut p: *mut c_void = std::ptr::null_mut();
     unsafe { sys::hipHostMalloc(&mut p, num_bytes, flags).result()? };
     Ok(p)
 }
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn free_host(ptr: *mut c_void) -> Result<(), HipError> {
     unsafe { sys::hipHostFree(ptr).result() }
 }
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn free_sync(ptr: u64) -> Result<(), HipError> {
     unsafe { sys::hipFree(ptr as *mut c_void).result() }
 }
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn free_async(ptr: u64, stream: sys::hipStream_t) -> Result<(), HipError> {
     unsafe { sys::hipFreeAsync(ptr as *mut c_void, stream).result() }
 }
@@ -646,6 +701,7 @@ pub fn free_async(ptr: u64, stream: sys::hipStream_t) -> Result<(), HipError> {
 /// `device` here is the runtime-API ordinal (an `i32`), not a `hipDevice_t`
 /// driver handle — `hipMemAdvise` is one of the few APIs that takes the int
 /// form even on the driver side.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn mem_advise(
     ptr: u64,
     bytes: usize,
@@ -657,6 +713,7 @@ pub unsafe fn mem_advise(
     }
 }
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn mem_prefetch_async(
     ptr: u64,
     bytes: usize,
@@ -669,6 +726,7 @@ pub unsafe fn mem_prefetch_async(
 }
 
 /// `(free, total)` bytes for the current device.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub fn mem_get_info() -> Result<(usize, usize), HipError> {
     let mut free: usize = 0;
     let mut total: usize = 0;
@@ -676,10 +734,12 @@ pub fn mem_get_info() -> Result<(usize, usize), HipError> {
     Ok((free, total))
 }
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memset_d8_sync(ptr: u64, value: u8, bytes: usize) -> Result<(), HipError> {
     unsafe { sys::hipMemsetD8(ptr as sys::hipDeviceptr_t, value, bytes).result() }
 }
 
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memset_d8_async(
     ptr: u64,
     value: u8,
@@ -694,6 +754,7 @@ pub unsafe fn memset_d8_async(
 /// # Safety
 /// `dst` must point to at least `src.len()` bytes of device memory owned by
 /// the caller and valid for writes.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memcpy_htod_sync(dst: u64, src: &[u8]) -> Result<(), HipError> {
     unsafe {
         sys::hipMemcpyHtoD(
@@ -708,6 +769,7 @@ pub unsafe fn memcpy_htod_sync(dst: u64, src: &[u8]) -> Result<(), HipError> {
 /// # Safety
 /// `dst` must point to at least `src.len()` bytes of device memory owned by
 /// the caller and valid for writes through `stream`.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memcpy_htod_async(
     dst: u64,
     src: &[u8],
@@ -727,6 +789,7 @@ pub unsafe fn memcpy_htod_async(
 /// # Safety
 /// `src` must point to at least `dst.len()` bytes of device memory readable
 /// by the caller.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memcpy_dtoh_sync(dst: &mut [u8], src: u64) -> Result<(), HipError> {
     unsafe {
         sys::hipMemcpyDtoH(
@@ -742,6 +805,7 @@ pub unsafe fn memcpy_dtoh_sync(dst: &mut [u8], src: u64) -> Result<(), HipError>
 /// `src` must point to at least `dst.len()` bytes of device memory readable
 /// through `stream`. Caller is responsible for synchronizing before reading
 /// `dst`.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memcpy_dtoh_async(
     dst: &mut [u8],
     src: u64,
@@ -761,6 +825,7 @@ pub unsafe fn memcpy_dtoh_async(
 /// # Safety
 /// Both `dst` and `src` must point to at least `bytes` of device memory in the
 /// same context.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memcpy_dtod_sync(dst: u64, src: u64, bytes: usize) -> Result<(), HipError> {
     unsafe {
         sys::hipMemcpyDtoD(
@@ -775,6 +840,7 @@ pub unsafe fn memcpy_dtod_sync(dst: u64, src: u64, bytes: usize) -> Result<(), H
 /// # Safety
 /// Both `dst` and `src` must point to at least `bytes` of device memory in the
 /// same context, reachable through `stream`.
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memcpy_dtod_async(
     dst: u64,
     src: u64,
@@ -795,7 +861,8 @@ pub unsafe fn memcpy_dtod_async(
 /// # Safety
 /// `dst` / `src` must point to at least `bytes` of device memory on
 /// `dst_device` / `src_device` respectively; both devices must have peer
-/// access enabled (see [`crate::driver::sys::hipDeviceEnablePeerAccess`]).
+/// access enabled (see [`crate::hip::sys::hipDeviceEnablePeerAccess`]).
+/// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
 pub unsafe fn memcpy_peer_async(
     dst: u64,
     dst_device: c_int,
@@ -822,11 +889,12 @@ pub mod module {
         sys::{self},
         HipError,
     };
-    use std::ffi::{c_void, CStr};
+    use core::ffi::{c_void, CStr};
 
     /// # Safety
     /// `image` must be a properly-formed hsaco / fatbin code-object blob.
     /// Rust can't verify this; passing arbitrary bytes is UB at the HIP layer.
+    /// See [HIP Module Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___module.html).
     pub unsafe fn load_data(image: &[u8]) -> Result<sys::hipModule_t, HipError> {
         let mut m: sys::hipModule_t = std::ptr::null_mut();
         unsafe {
@@ -837,6 +905,7 @@ pub mod module {
 
     /// # Safety
     /// `m` must not have already been unloaded.
+    /// See [HIP Module Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___module.html).
     pub unsafe fn unload(m: sys::hipModule_t) -> Result<(), HipError> {
         unsafe { sys::hipModuleUnload(m).result() }
     }
@@ -844,6 +913,7 @@ pub mod module {
     /// Take a `&CStr` because `HipError` no longer carries an `InvalidName`
     /// variant — callers with a `&str` should convert via `CString::new(...)`
     /// at the boundary.
+    /// See [HIP Module Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___module.html).
     pub fn get_function(
         m: sys::hipModule_t,
         name: &CStr,
@@ -854,6 +924,7 @@ pub mod module {
     }
 
     /// Returns `(device_ptr, size_in_bytes)` for a `__device__` global by name.
+    /// See [HIP Module Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___module.html).
     pub fn get_global(
         m: sys::hipModule_t,
         name: &CStr,
@@ -872,28 +943,33 @@ pub mod event {
         sys::{self},
         HipError,
     };
-    use std::ffi::c_uint;
+    use core::ffi::c_uint;
 
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn create() -> Result<sys::hipEvent_t, HipError> {
         let mut e: sys::hipEvent_t = std::ptr::null_mut();
         unsafe { sys::hipEventCreate(&mut e).result()? };
         Ok(e)
     }
 
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn create_with_flags(flags: c_uint) -> Result<sys::hipEvent_t, HipError> {
         let mut e: sys::hipEvent_t = std::ptr::null_mut();
         unsafe { sys::hipEventCreateWithFlags(&mut e, flags).result()? };
         Ok(e)
     }
 
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn destroy(e: sys::hipEvent_t) -> Result<(), HipError> {
         unsafe { sys::hipEventDestroy(e).result() }
     }
 
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn record(e: sys::hipEvent_t, stream: sys::hipStream_t) -> Result<(), HipError> {
         unsafe { sys::hipEventRecord(e, stream).result() }
     }
 
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn record_with_flags(
         e: sys::hipEvent_t,
         stream: sys::hipStream_t,
@@ -902,11 +978,13 @@ pub mod event {
         unsafe { sys::hipEventRecordWithFlags(e, stream, flags).result() }
     }
 
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn synchronize(e: sys::hipEvent_t) -> Result<(), HipError> {
         unsafe { sys::hipEventSynchronize(e).result() }
     }
 
     /// Same `hipErrorNotReady → false` mapping as [`stream::query`](super::stream::query).
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn query(e: sys::hipEvent_t) -> Result<bool, HipError> {
         match unsafe { sys::hipEventQuery(e) } {
             sys::hipError_t::hipSuccess => Ok(true),
@@ -916,6 +994,7 @@ pub mod event {
     }
 
     /// Elapsed time between two events in milliseconds.
+    /// See [HIP Event Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___event.html).
     pub fn elapsed(start: sys::hipEvent_t, stop: sys::hipEvent_t) -> Result<f32, HipError> {
         let mut ms: f32 = 0.0;
         unsafe { sys::hipEventElapsedTime(&mut ms, start, stop).result()? };
@@ -926,6 +1005,7 @@ pub mod event {
 /// # Safety
 /// `params` must contain pointers to live argument values whose count and
 /// types match the kernel signature for `f`.
+/// See [HIP Execution Control docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___execution.html).
 pub unsafe fn launch_kernel(
     f: sys::hipFunction_t,
     grid: (u32, u32, u32),
@@ -958,6 +1038,7 @@ pub unsafe fn launch_kernel(
 /// # Safety
 /// Same as [`launch_kernel`], plus the kernel must be compiled with
 /// `--cooperative` and the device must report `cooperativeLaunch` support.
+/// See [HIP Execution Control docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___execution.html).
 pub unsafe fn launch_cooperative_kernel(
     f: sys::hipFunction_t,
     grid: (u32, u32, u32),
@@ -988,7 +1069,7 @@ pub mod external_memory {
         sys::{self},
         HipError,
     };
-    use std::mem::MaybeUninit;
+    use core::mem::MaybeUninit;
 
     /// Import an external memory object from a Unix file descriptor.
     /// Destroy via [`destroy_external_memory`].
@@ -999,6 +1080,7 @@ pub mod external_memory {
     /// # Safety
     /// `size` must be the size of the underlying memory object in bytes.
     #[cfg(unix)]
+    /// See [HIP Runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
     pub unsafe fn import_external_memory_opaque_fd(
         fd: std::os::fd::RawFd,
         size: u64,
@@ -1027,6 +1109,7 @@ pub mod external_memory {
     /// # Safety
     /// `size` must be the size of the underlying memory object in bytes.
     #[cfg(windows)]
+    /// See [HIP Runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
     pub unsafe fn import_external_memory_opaque_win32(
         handle: std::os::windows::io::RawHandle,
         size: u64,
@@ -1054,6 +1137,8 @@ pub mod external_memory {
     /// # Safety
     /// 1. Any mapped buffers onto this object must already be freed.
     /// 2. The object must only be destroyed once.
+    ///
+    /// See [HIP Runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
     pub unsafe fn destroy_external_memory(
         external_memory: sys::hipExternalMemory_t,
     ) -> Result<(), HipError> {
@@ -1066,12 +1151,13 @@ pub mod external_memory {
     /// # Safety
     /// Mapped buffers may overlap. Caller must ensure the underlying
     /// memory remains valid for the buffer's lifetime.
+    /// See [HIP Runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
     pub unsafe fn get_mapped_buffer(
         external_memory: sys::hipExternalMemory_t,
         offset: u64,
         size: u64,
     ) -> Result<u64, HipError> {
-        let mut device_ptr: *mut std::ffi::c_void = std::ptr::null_mut();
+        let mut device_ptr: *mut core::ffi::c_void = std::ptr::null_mut();
         let buffer_description = sys::hipExternalMemoryBufferDesc_st {
             offset,
             size,
@@ -1095,16 +1181,18 @@ pub mod graph {
         sys::{self},
         HipError,
     };
-    use std::ffi::c_ulonglong;
+    use core::ffi::c_ulonglong;
 
     /// # Safety
     /// `graph` must not have already been destroyed.
+    /// See [HIP Graph Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___graph.html).
     pub unsafe fn destroy(graph: sys::hipGraph_t) -> Result<(), HipError> {
         unsafe { sys::hipGraphDestroy(graph).result() }
     }
 
     /// # Safety
     /// `exec` must not have already been destroyed.
+    /// See [HIP Graph Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___graph.html).
     pub unsafe fn exec_destroy(exec: sys::hipGraphExec_t) -> Result<(), HipError> {
         unsafe { sys::hipGraphExecDestroy(exec).result() }
     }
@@ -1116,6 +1204,7 @@ pub mod graph {
     ///
     /// # Safety
     /// `graph` must be a valid handle and not currently being captured.
+    /// See [HIP Graph Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___graph.html).
     pub unsafe fn instantiate(
         graph: sys::hipGraph_t,
         flags: sys::hipGraphInstantiateFlags,
@@ -1130,6 +1219,7 @@ pub mod graph {
 
     /// # Safety
     /// `exec` must be a valid handle and `stream` must be live.
+    /// See [HIP Graph Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___graph.html).
     pub unsafe fn launch(
         exec: sys::hipGraphExec_t,
         stream: sys::hipStream_t,
@@ -1142,6 +1232,7 @@ pub mod graph {
     ///
     /// # Safety
     /// Same as [`launch`].
+    /// See [HIP Graph Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___graph.html).
     pub unsafe fn upload(
         exec: sys::hipGraphExec_t,
         stream: sys::hipStream_t,

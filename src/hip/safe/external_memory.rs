@@ -1,6 +1,6 @@
 //! Import externally-allocated memory (Vulkan / D3D / file-backed
 //! buffers exposed via an OS handle) and map device-accessible buffers
-//! over it. Mirrors [`cudarc::driver::safe::external_memory`].
+//! over it. Mirrors `cudarc::driver::safe::external_memory`.
 
 use std::fs::File;
 use std::mem::ManuallyDrop;

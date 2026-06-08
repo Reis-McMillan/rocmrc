@@ -1,5 +1,5 @@
 //! Thin `Result`-wrapped rocBLAS FFI. Mirror layout:
-//! [`cudarc::cublas::result`]. Surface matches cudarc 1:1 — handle
+//! `cudarc::cublas::result`. Surface matches cudarc 1:1 — handle
 //! lifecycle, set_stream, GEMV / GEMM (s/d/h) and their strided-batched
 //! variants, the `_ex` mixed-precision GEMMs, and the L1 reductions
 //! cudarc surfaces (`asum`). Other L1 helpers (axpy / scal / nrm2 / dot
@@ -22,6 +22,8 @@
 //! wraps only the standard 32-bit API, matching cudarc's choice. Reach
 //! into `sys::rocblas_*_64` directly if you need 64-bit indices for
 //! oversized matrices.
+//!
+//! See the [rocBLAS API docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/).
 
 use super::sys::{self};
 use core::ffi::c_void;
@@ -57,6 +59,7 @@ impl std::error::Error for RocblasError {}
 // ---------------------------------------------------------------------------
 
 /// Create a rocBLAS handle.
+/// Wraps `rocblas_create_handle`. See the [rocBLAS API docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/).
 pub fn create_handle() -> Result<sys::rocblas_handle, RocblasError> {
     let mut handle = MaybeUninit::uninit();
     unsafe {
@@ -67,12 +70,14 @@ pub fn create_handle() -> Result<sys::rocblas_handle, RocblasError> {
 
 /// # Safety
 /// `handle` must not have already been destroyed.
+/// Wraps `rocblas_destroy_handle`. See the [rocBLAS API docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/).
 pub unsafe fn destroy_handle(handle: sys::rocblas_handle) -> Result<(), RocblasError> {
     unsafe { sys::rocblas_destroy_handle(handle).result() }
 }
 
 /// # Safety
 /// `handle` must be live; `stream` must be a live `hipStream_t`.
+/// Wraps `rocblas_set_stream`. See the [rocBLAS API docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/).
 pub unsafe fn set_stream(
     handle: sys::rocblas_handle,
     stream: sys::hipStream_t,
@@ -86,6 +91,7 @@ pub unsafe fn set_stream(
 ///
 /// # Safety
 /// `handle` must be live.
+/// Wraps `rocblas_set_pointer_mode`. See the [rocBLAS API docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/).
 pub unsafe fn set_pointer_mode(
     handle: sys::rocblas_handle,
     mode: sys::rocblas_pointer_mode,
@@ -100,6 +106,7 @@ pub unsafe fn set_pointer_mode(
 /// # Safety
 /// All pointers must be valid for `m * n` / `n` / `m` elements respectively
 /// at the given strides. `alpha` / `beta` follow the handle's pointer mode.
+/// Wraps `rocblas_sgemv`. See [rocBLAS level-2 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-2.html).
 pub unsafe fn sgemv(
     handle: sys::rocblas_handle,
     trans: sys::rocblas_operation,
@@ -120,6 +127,7 @@ pub unsafe fn sgemv(
 }
 
 /// # Safety: see [`sgemv`].
+/// Wraps `rocblas_dgemv`. See [rocBLAS level-2 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-2.html).
 pub unsafe fn dgemv(
     handle: sys::rocblas_handle,
     trans: sys::rocblas_operation,
@@ -149,6 +157,7 @@ pub unsafe fn dgemv(
 ///
 /// Casts `*const half::f16` → `*const sys::rocblas_half` at the FFI
 /// boundary. Both are `repr(C)` over `u16` and are layout-compatible.
+/// Wraps `rocblas_hgemm`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 pub unsafe fn hgemm(
     handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
@@ -187,6 +196,7 @@ pub unsafe fn hgemm(
 }
 
 /// # Safety: see [`hgemm`].
+/// Wraps `rocblas_sgemm`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 pub unsafe fn sgemm(
     handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
@@ -212,6 +222,7 @@ pub unsafe fn sgemm(
 }
 
 /// # Safety: see [`hgemm`].
+/// Wraps `rocblas_dgemm`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 pub unsafe fn dgemm(
     handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
@@ -242,6 +253,7 @@ pub unsafe fn dgemm(
 
 /// # Safety: same as [`hgemm`] applied per batch element.
 #[allow(clippy::too_many_arguments)]
+/// Wraps `rocblas_hgemm_strided_batched`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 pub unsafe fn hgemm_strided_batched(
     handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
@@ -289,6 +301,7 @@ pub unsafe fn hgemm_strided_batched(
 
 /// # Safety: same as [`sgemm`] applied per batch element.
 #[allow(clippy::too_many_arguments)]
+/// Wraps `rocblas_sgemm_strided_batched`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 pub unsafe fn sgemm_strided_batched(
     handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
@@ -336,6 +349,7 @@ pub unsafe fn sgemm_strided_batched(
 
 /// # Safety: same as [`dgemm`] applied per batch element.
 #[allow(clippy::too_many_arguments)]
+/// Wraps `rocblas_dgemm_strided_batched`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 pub unsafe fn dgemm_strided_batched(
     handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
@@ -399,6 +413,8 @@ pub unsafe fn dgemm_strided_batched(
 /// # Safety
 /// - All device pointers must be valid for their declared types and strides.
 /// - `alpha` / `beta` follow the handle's pointer mode.
+///
+/// Wraps `rocblas_gemm_ex`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn gemm_ex(
     handle: sys::rocblas_handle,
@@ -462,6 +478,7 @@ pub unsafe fn gemm_ex(
 ///
 /// # Safety: see [`gemm_ex`], applied per batch element.
 #[allow(clippy::too_many_arguments)]
+/// Wraps `rocblas_gemm_strided_batched_ex`. See [rocBLAS level-3 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html).
 pub unsafe fn gemm_strided_batched_ex(
     handle: sys::rocblas_handle,
     transa: sys::rocblas_operation,
@@ -536,6 +553,7 @@ pub unsafe fn gemm_strided_batched_ex(
 
 /// # Safety: `x` must be valid for `n * incx` elements; `result` must
 /// point to one `f32` reachable per the handle's pointer mode.
+/// Wraps `rocblas_sasum`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn sasum(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -547,6 +565,7 @@ pub unsafe fn sasum(
 }
 
 /// # Safety: see [`sasum`].
+/// Wraps `rocblas_dasum`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn dasum(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -558,6 +577,7 @@ pub unsafe fn dasum(
 }
 
 /// # Safety: see [`sasum`].
+/// Wraps `rocblas_snrm2`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn snrm2(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -569,6 +589,7 @@ pub unsafe fn snrm2(
 }
 
 /// # Safety: see [`sasum`].
+/// Wraps `rocblas_dnrm2`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn dnrm2(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -581,6 +602,7 @@ pub unsafe fn dnrm2(
 
 /// # Safety: `x` / `y` valid for `n` elements at the given strides;
 /// `result` follows the handle's pointer mode.
+/// Wraps `rocblas_sdot`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn sdot(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -594,6 +616,7 @@ pub unsafe fn sdot(
 }
 
 /// # Safety: see [`sdot`].
+/// Wraps `rocblas_ddot`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn ddot(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -609,6 +632,7 @@ pub unsafe fn ddot(
 /// `y := alpha*x + y`.
 ///
 /// # Safety: device pointers valid for `n` elements at the given strides.
+/// Wraps `rocblas_saxpy`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn saxpy(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -622,6 +646,7 @@ pub unsafe fn saxpy(
 }
 
 /// # Safety: see [`saxpy`].
+/// Wraps `rocblas_daxpy`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn daxpy(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -637,6 +662,7 @@ pub unsafe fn daxpy(
 /// `x := alpha*x`.
 ///
 /// # Safety: `x` valid for `n * incx` elements.
+/// Wraps `rocblas_sscal`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn sscal(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -648,6 +674,7 @@ pub unsafe fn sscal(
 }
 
 /// # Safety: see [`sscal`].
+/// Wraps `rocblas_dscal`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn dscal(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -661,6 +688,7 @@ pub unsafe fn dscal(
 /// `y := x`.
 ///
 /// # Safety: `x` / `y` valid for `n` elements at the given strides.
+/// Wraps `rocblas_scopy`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn scopy(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,
@@ -673,6 +701,7 @@ pub unsafe fn scopy(
 }
 
 /// # Safety: see [`scopy`].
+/// Wraps `rocblas_dcopy`. See [rocBLAS level-1 docs](https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-1.html).
 pub unsafe fn dcopy(
     handle: sys::rocblas_handle,
     n: sys::rocblas_int,

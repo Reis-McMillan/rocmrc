@@ -1,10 +1,10 @@
-//! Kernel launch builder. Mirrors [`cudarc::driver::safe::launch`]. The
+//! Kernel launch builder. Mirrors `cudarc::driver::safe::launch`. The
 //! [`LaunchArgs`] builder accumulates kernel parameters via repeated
 //! [`PushKernelArg::arg`] calls; each `arg` impl that takes a device
 //! buffer also queues the read/write event waits/records needed to make
 //! the launch compose correctly with other streams in the same context.
 
-use std::ffi::c_uint;
+use core::ffi::c_uint;
 use std::vec::Vec;
 
 use crate::hip::{
@@ -63,7 +63,7 @@ pub struct LaunchArgs<'a> {
     pub(super) func: &'a HipFunction,
     pub(super) waits: Vec<&'a HipEvent>,
     pub(super) records: Vec<&'a HipEvent>,
-    pub(super) args: Vec<*mut std::ffi::c_void>,
+    pub(super) args: Vec<*mut core::ffi::c_void>,
     pub(super) flags: Option<c_uint>,
 }
 

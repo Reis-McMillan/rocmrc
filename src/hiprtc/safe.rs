@@ -9,7 +9,8 @@
 use super::{result, sys};
 
 use std::borrow::Cow;
-use std::ffi::{CStr, CString, c_char};
+use core::ffi::{CStr, c_char};
+use std::ffi::CString;
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;

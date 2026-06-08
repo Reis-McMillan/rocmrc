@@ -1,6 +1,6 @@
 //! Safe wrappers over [`crate::hip::result`] — `HipContext`, `HipStream`,
 //! `HipSlice`, and the surrounding type machinery. Mirrors
-//! [`cudarc::driver::safe`] in structure, naming, and the read/write
+//! `cudarc::driver::safe` in structure, naming, and the read/write
 //! event-tracking model that makes multi-stream concurrency safe.
 //!
 //! HIP-specific divergences from cudarc are documented inline on the affected
@@ -12,8 +12,9 @@ use crate::hip::{
     sys::{self},
 };
 
+use core::ffi::{c_int, c_uint};
 use std::{
-    ffi::{c_int, c_uint, CString},
+    ffi::CString,
     marker::PhantomData,
     ops::{Bound, RangeBounds},
     sync::{
@@ -57,7 +58,7 @@ impl EventWaitFlags {
 // ----------------------------------------------------------------------------
 
 /// A HIP device + context, bundled together. Analogue of
-/// [`cudarc::driver::safe::CudaContext`].
+/// `cudarc::driver::safe::CudaContext`.
 ///
 /// Constructed via [`HipContext::new`] (primary context),
 /// [`HipContext::new_non_primary`] (independent context), or
@@ -104,7 +105,7 @@ impl Eq for HipContext {}
 
 impl HipContext {
     /// Retain and bind the device's primary context. Matches cudarc's
-    /// [`CudaContext::new`].
+    /// `CudaContext::new`.
     pub fn new(ordinal: usize) -> Result<Arc<Self>, HipError> {
         result::init()?;
         let hip_device = result::device::get(ordinal as i32)?;
@@ -210,7 +211,7 @@ impl HipContext {
     /// Full `hipDeviceProp_tR0600` struct for this context's device.
     /// Prefer [`Self::attribute`] for single-field queries on hot paths.
     pub fn properties(&self) -> Result<sys::hipDeviceProp_tR0600, HipError> {
-        result::device::get_properties(self.ordinal as std::ffi::c_int)
+        result::device::get_properties(self.ordinal as core::ffi::c_int)
     }
 
     /// The device's gfx arch as a string (e.g. `"gfx1100"`). Reads
@@ -218,7 +219,7 @@ impl HipContext {
     /// suffix (`":sramecc-:xnack-"` etc.) at the first `:`.
     pub fn gfx_arch(&self) -> Result<String, HipError> {
         let props = self.properties()?;
-        let cstr = unsafe { std::ffi::CStr::from_ptr(props.gcnArchName.as_ptr()) };
+        let cstr = unsafe { core::ffi::CStr::from_ptr(props.gcnArchName.as_ptr()) };
         let raw = cstr.to_string_lossy();
         Ok(raw.split(':').next().unwrap_or(&raw).to_string())
     }
@@ -243,8 +244,8 @@ impl HipContext {
     /// # Safety
     /// The caller must ensure that **no live** [`HipSlice`] /
     /// [`HipStream`] / [`HipEvent`] / [`HipModule`] / [`HipFunction`] /
-    /// [`HipUnifiedSlice`] / [`PinnedHostSlice`] / etc. tied to this
-    /// device is used after the reset.
+    /// [`HipUnifiedSlice`](crate::hip::HipUnifiedSlice) / [`PinnedHostSlice`] /
+    /// etc. tied to this device is used after the reset.
     pub unsafe fn reset() -> Result<(), HipError> {
         unsafe { result::device::reset() }
     }
@@ -423,7 +424,7 @@ impl HipContext {
 // ----------------------------------------------------------------------------
 
 /// Synchronization point on a stream. Analogue of
-/// [`cudarc::driver::safe::CudaEvent`].
+/// `cudarc::driver::safe::CudaEvent`.
 #[derive(Debug)]
 pub struct HipEvent {
     pub(crate) hip_event: sys::hipEvent_t,
@@ -504,7 +505,7 @@ impl HipEvent {
 // ----------------------------------------------------------------------------
 
 /// Ordered command queue on a HIP device. Analogue of
-/// [`cudarc::driver::safe::CudaStream`].
+/// `cudarc::driver::safe::CudaStream`.
 ///
 /// `PartialEq` / `Eq` compare the raw `hipStream_t` handles.
 #[derive(Debug)]
@@ -969,7 +970,7 @@ impl<T> HostSlice<T> for Vec<T> {
 // ----------------------------------------------------------------------------
 
 /// Owned RAII device buffer of `T`. Analogue of
-/// [`cudarc::driver::safe::CudaSlice`].
+/// `cudarc::driver::safe::CudaSlice`.
 ///
 /// Holds optional `read` / `write` events used by the multi-stream
 /// synchronization machinery — these are `Some` when the allocating
@@ -1722,7 +1723,7 @@ impl<T> HostSlice<T> for PinnedHostSlice<T> {
 // ----------------------------------------------------------------------------
 
 /// A loaded HIP code object (hsaco / fatbin). Analogue of
-/// [`cudarc::driver::safe::CudaModule`].
+/// `cudarc::driver::safe::CudaModule`.
 #[derive(Debug)]
 pub struct HipModule {
     pub(crate) hip_module: sys::hipModule_t,
@@ -1803,7 +1804,7 @@ impl HipModule {
 static NO_EVENT: Option<HipEvent> = None;
 
 /// A kernel function inside a loaded [`HipModule`]. Analogue of
-/// [`cudarc::driver::safe::CudaFunction`]. Cheap to clone — the raw
+/// `cudarc::driver::safe::CudaFunction`. Cheap to clone — the raw
 /// function handle is a pointer and the `Arc<HipModule>` keeps the owning
 /// module alive.
 ///

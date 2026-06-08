@@ -7,7 +7,7 @@
 use rocmrc::hip::HipContext;
 use rocmrc::rocblas::{
     Axpy, AxpyConfig, Copy as BlasCopy, CopyConfig, Dot, DotConfig, Gemm, GemmConfig, Nrm2,
-    Nrm2Config, Operation, RocblasHandle, Scal, ScalConfig, rocblas_pointer_mode,
+    Nrm2Config, Operation, RocBlas, Scal, ScalConfig,
 };
 
 fn main() {
@@ -15,7 +15,7 @@ fn main() {
     let stream = ctx.default_stream();
     println!("device  = {}", ctx.name().unwrap_or_else(|_| "<unknown>".into()));
 
-    let handle = RocblasHandle::new(stream.clone()).expect("RocblasHandle");
+    let handle = RocBlas::new(stream.clone()).expect("RocBlas");
 
     // ----- GEMM: C = A * B for square matrices in column-major -----
     const N: usize = 32;
@@ -24,11 +24,11 @@ fn main() {
 
     let d_a = stream.clone_htod(&a_host).unwrap();
     let d_b = stream.clone_htod(&b_host).unwrap();
-    let d_c = ctx.alloc::<f32>(N * N).unwrap();
+    let mut d_c = stream.alloc_zeros::<f32>(N * N).unwrap();
 
     let cfg = GemmConfig::<f32> {
-        transa: Operation::None,
-        transb: Operation::None,
+        transa: Operation::rocblas_operation_none,
+        transb: Operation::rocblas_operation_none,
         m: N as i32,
         n: N as i32,
         k: N as i32,
@@ -38,16 +38,7 @@ fn main() {
         beta: 0.0,
         ldc: N as i32,
     };
-    unsafe {
-        handle
-            .gemm(
-                cfg,
-                d_a.device_ptr(&stream).0,
-                d_b.device_ptr(&stream).0,
-                d_c.device_ptr(&stream).0,
-            )
-            .expect("sgemm");
-    }
+    handle.gemm(cfg, &d_a, &d_b, &mut d_c).expect("sgemm");
 
     let c = stream.clone_dtoh(&d_c).expect("dtoh");
     // Column-major CPU reference: C[i,j] = sum_k A[i,k] * B[k,j]
@@ -70,74 +61,58 @@ fn main() {
     let x_host: Vec<f32> = (0..M).map(|i| 0.001 * i as f32).collect();
     let y_host: Vec<f32> = (0..M).map(|i| 0.5 - 0.001 * i as f32).collect();
 
-    let d_x = stream.clone_htod(&x_host).unwrap();
-    let d_y = stream.clone_htod(&y_host).unwrap();
-    let d_z = ctx.alloc::<f32>(M).unwrap(); // copy target
-    let d_scratch = ctx.alloc::<f32>(1).unwrap(); // device-side reduction result
+    let mut d_x = stream.clone_htod(&x_host).unwrap();
+    let mut d_y = stream.clone_htod(&y_host).unwrap();
+    let mut d_z = stream.alloc_zeros::<f32>(M).unwrap(); // copy target
 
     // scal: x := 2*x
-    unsafe {
-        handle
-            .scal(
-                ScalConfig { n: M as i32, alpha: 2.0f32, incx: 1 },
-                d_x.device_ptr(&stream).0,
-            )
-            .expect("scal");
-    }
+    handle
+        .scal(ScalConfig { n: M as i32, alpha: 2.0f32, incx: 1 }, &mut d_x)
+        .expect("scal");
 
     // axpy: y := 3*x + y
-    unsafe {
-        handle
-            .axpy(
-                AxpyConfig { n: M as i32, alpha: 3.0f32, incx: 1, incy: 1 },
-                d_x.device_ptr(&stream).0,
-                d_y.device_ptr(&stream).0,
-            )
-            .expect("axpy");
-    }
+    handle
+        .axpy(
+            AxpyConfig { n: M as i32, alpha: 3.0f32, incx: 1, incy: 1 },
+            &d_x,
+            &mut d_y,
+        )
+        .expect("axpy");
 
     // copy: z := y
     // Copy/Dot/Nrm2 configs don't carry a `T`, so the trait dispatch needs an
     // explicit type via UFCS. (scal/axpy can infer T from `alpha: T` in cfg.)
-    unsafe {
-        BlasCopy::<f32>::copy(
-            &*handle,
-            CopyConfig { n: M as i32, incx: 1, incy: 1 },
-            d_y.device_ptr(&stream).0,
-            d_z.device_ptr(&stream).0,
-        )
-        .expect("copy");
-    }
+    BlasCopy::<f32>::copy(
+        &handle,
+        CopyConfig { n: M as i32, incx: 1, incy: 1 },
+        &d_y,
+        &mut d_z,
+    )
+    .expect("copy");
 
-    // Switch to device pointer mode for the reduction; result lands in d_scratch.
-    handle
-        .set_pointer_mode(rocblas_pointer_mode::rocblas_pointer_mode_device)
-        .expect("ptr mode");
+    // Reductions write their scalar result to a host `&mut f32` (the default
+    // host pointer mode; rocBLAS syncs the stream for host-side results).
 
     // dot: <x, z>
-    unsafe {
-        Dot::<f32>::dot(
-            &*handle,
-            DotConfig { n: M as i32, incx: 1, incy: 1 },
-            d_x.device_ptr(&stream).0,
-            d_z.device_ptr(&stream).0,
-            d_scratch.device_ptr(&stream).0,
-        )
-        .expect("dot");
-    }
-    let dot_val = stream.clone_dtoh(&d_scratch).expect("dot dtoh")[0];
+    let mut dot_val = 0.0f32;
+    Dot::<f32>::dot(
+        &handle,
+        DotConfig { n: M as i32, incx: 1, incy: 1 },
+        &d_x,
+        &d_z,
+        &mut dot_val,
+    )
+    .expect("dot");
 
     // nrm2(x)
-    unsafe {
-        Nrm2::<f32>::nrm2(
-            &*handle,
-            Nrm2Config { n: M as i32, incx: 1 },
-            d_x.device_ptr(&stream).0,
-            d_scratch.device_ptr(&stream).0,
-        )
-        .expect("nrm2");
-    }
-    let nrm_val = stream.clone_dtoh(&d_scratch).expect("nrm2 dtoh")[0];
+    let mut nrm_val = 0.0f32;
+    Nrm2::<f32>::nrm2(
+        &handle,
+        Nrm2Config { n: M as i32, incx: 1 },
+        &d_x,
+        &mut nrm_val,
+    )
+    .expect("nrm2");
 
     // CPU reference for the L1 chain.
     let x_ref: Vec<f32> = x_host.iter().map(|&v| 2.0 * v).collect();

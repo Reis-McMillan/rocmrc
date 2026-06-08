@@ -1,13 +1,13 @@
 //! End-to-end "hello world" — proves the hipRTC → hipModule → launch path.
 //!
-//! Uses only driver + hiprtc, which are always-on modules. No rocm-XYYYY
+//! Uses only hip + hiprtc, which are always-on modules. No rocm-XYYYY
 //! feature is required to compile or run this example.
 //!
 //! Run:
 //!   ROCM_PATH=/opt/rocm cargo run --example vec_add
 
-use rocmrc::{HipContext, HipModule};
-use std::ffi::c_void;
+use rocmrc::hiprtc::compile_hsaco;
+use rocmrc::{HipContext, LaunchConfig, PushKernelArg};
 
 const SRC: &str = r#"
 extern "C" __global__
@@ -21,15 +21,13 @@ fn main() {
     let ctx = HipContext::new(0).expect("HipContext::new failed");
     let stream = ctx.default_stream();
     println!("device  = {}", ctx.name().unwrap_or_else(|_| "<unknown>".into()));
-    println!("gfx     = {}", ctx.gfx_arch());
 
-    let (hsaco, log) = rocmrc::hiprtc::compile(SRC, ctx.gfx_arch()).expect("hipRTC compile");
-    if !log.trim().is_empty() {
-        println!("hipRTC log:\n{log}");
-    }
+    let gfx = ctx.gfx_version().expect("unsupported gfx arch");
+    println!("gfx     = {gfx}");
 
-    let module = HipModule::from_hsaco(hsaco.as_bytes()).expect("module load");
-    let func = module.get_function("vec_add").expect("get_function");
+    let hsaco = compile_hsaco(SRC, gfx).expect("hipRTC compile");
+    let module = ctx.load_module(hsaco).expect("module load");
+    let func = module.load_function("vec_add").expect("load_function");
 
     const N: usize = 1024;
     let a: Vec<f32> = (0..N).map(|i| i as f32).collect();
@@ -37,25 +35,14 @@ fn main() {
 
     let d_a = stream.clone_htod(&a).unwrap();
     let d_b = stream.clone_htod(&b).unwrap();
-    let d_out = ctx.alloc::<f32>(N).unwrap();
+    let mut d_out = stream.alloc_zeros::<f32>(N).unwrap();
 
-    // Arg storage must outlive the launch call. Hold values in named locals
-    // and take pointers to them.
-    let d_out_ptr = d_out.device_ptr(&stream).0;
-    let d_a_ptr = d_a.device_ptr(&stream).0;
-    let d_b_ptr = d_b.device_ptr(&stream).0;
-    let n_i32: i32 = N as i32;
-    let mut params: [*mut c_void; 4] = [
-        &d_out_ptr as *const _ as *mut c_void,
-        &d_a_ptr as *const _ as *mut c_void,
-        &d_b_ptr as *const _ as *mut c_void,
-        &n_i32 as *const _ as *mut c_void,
-    ];
-
-    let grid = (((N + 255) / 256) as u32, 1, 1);
-    let block = (256u32, 1, 1);
+    let n = N as i32;
+    let mut builder = stream.launch_builder(&func);
+    builder.arg(&mut d_out).arg(&d_a).arg(&d_b).arg(&n);
     unsafe {
-        func.launch(grid, block, 0, &stream, &mut params)
+        builder
+            .launch(LaunchConfig::for_num_elems(N as u32))
             .expect("kernel launch");
     }
 
@@ -68,5 +55,5 @@ fn main() {
             out[i]
         );
     }
-    println!("ok  ({} elements, sum-check passed)", N);
+    println!("ok  ({N} elements, sum-check passed)");
 }

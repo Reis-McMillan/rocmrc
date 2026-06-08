@@ -1,5 +1,5 @@
 //! Safe abstractions around [`crate::hipblaslt::result`] for doing matmul.
-//! Mirrors [`cudarc::cublaslt::safe`] with HIP-specific divergences flagged
+//! Mirrors `cudarc::cublaslt::safe` with HIP-specific divergences flagged
 //! inline (workspace sizing, TF32 semantics, `f16` feature gating).
 
 use super::{result, sys};
@@ -13,7 +13,7 @@ use std::sync::Arc;
 pub use super::result::HipblasError;
 
 /// Wrapper around [`sys::hipblasLtHandle_t`]. Analogue of
-/// [`cudarc::cublaslt::CudaBlasLT`].
+/// `cudarc::cublaslt::CudaBlasLT`.
 ///
 /// 1. Create with [`HipBlasLT::new`].
 /// 2. Execute matmul kernels via the [`Matmul`] trait. `f32` is always
@@ -304,7 +304,7 @@ pub trait MatmulShared {
 
 /// Configuration for [`Matmul::matmul`].
 ///
-/// **HIP divergence from cudarc's [`cudarc::cublaslt::MatmulConfig`]:**
+/// **HIP divergence from cudarc's `cudarc::cublaslt::MatmulConfig`:**
 /// `transc` (no `HIPBLASLT_MATMUL_DESC_TRANSC` enum) and `stride_bias`
 /// (no `HIPBLASLT_MATMUL_DESC_BIAS_BATCH_STRIDE`) are absent from this
 /// struct because hipBLASLt doesn't accept them — keeping them as

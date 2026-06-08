@@ -1,4 +1,12 @@
-use std::ffi::{CStr, CString, c_char, c_int};
+//! `Result`-wrapped FFI over hipRTC (`hiprtc.h`), HIP's runtime kernel
+//! compiler. Mirrors `cudarc::nvrtc::result`'s shape: program lifecycle
+//! (`create` / `compile` / `destroy`) plus code/log retrieval.
+//!
+//! See the [HIP RTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
+
+use core::ffi::{CStr, c_char, c_int};
+use core::mem::MaybeUninit;
+use std::ffi::CString;
 
 use super::sys::{self};
 
@@ -22,11 +30,12 @@ impl std::fmt::Display for HiprtcError {
 
 impl std::error::Error for HiprtcError {}
 
+/// Wraps `hiprtcCreateProgram`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
 pub fn create_program(src: &CStr, name: Option<&CStr>) -> Result<sys::hiprtcProgram, HiprtcError> {
-    let mut prog: sys::hiprtcProgram = unsafe { std::mem::zeroed() };
+    let mut prog = MaybeUninit::uninit();
     unsafe {
         sys::hiprtcCreateProgram(
-            &mut prog,
+            prog.as_mut_ptr(),
             src.as_ptr(),
             name.map(|n| n.as_ptr()).unwrap_or(std::ptr::null()),
             0,
@@ -34,9 +43,10 @@ pub fn create_program(src: &CStr, name: Option<&CStr>) -> Result<sys::hiprtcProg
             std::ptr::null(),
         ).result()?
     };
-    Ok(prog)
+    Ok(unsafe { prog.assume_init() })
 }
 
+/// Wraps `hiprtcCompileProgram`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
 pub fn compile_program<O: Clone + Into<Vec<u8>>>(
     prog: sys::hiprtcProgram,
     options: &[O]
@@ -57,10 +67,12 @@ pub fn compile_program<O: Clone + Into<Vec<u8>>>(
     }
 }
 
+/// Wraps `hiprtcDestroyProgram`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
 pub fn destroy_program(mut prog: sys::hiprtcProgram) -> Result<(), HiprtcError> {
     unsafe{ sys::hiprtcDestroyProgram(&mut prog).result() }
 }
 
+/// Wraps `hiprtcGetCode / hiprtcGetCodeSize`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
 pub fn get_hsaco(prog: sys::hiprtcProgram) -> Result<Vec<c_char>, HiprtcError> {
     let mut size: usize = 0;
     unsafe { sys::hiprtcGetCodeSize(prog, &mut size).result()? };
@@ -71,6 +83,7 @@ pub fn get_hsaco(prog: sys::hiprtcProgram) -> Result<Vec<c_char>, HiprtcError> {
     Ok(hsaco_src)
 }
 
+/// Wraps `hiprtcGetProgramLog / hiprtcGetProgramLogSize`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
 pub fn get_program_log(prog: sys::hiprtcProgram) -> Result<Vec<c_char>, HiprtcError> {
     let mut size: usize = 0;
     unsafe { sys::hiprtcGetProgramLogSize(prog, &mut size).result()? };

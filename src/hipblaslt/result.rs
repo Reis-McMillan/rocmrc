@@ -1,7 +1,9 @@
 //! Thin `Result`-wrapped hipBLASLt FFI. Mirror layout:
-//! [`cudarc::cublaslt::result`]. Function shapes and `unsafe`-markers
+//! `cudarc::cublaslt::result`. Function shapes and `unsafe`-markers
 //! follow cudarc 1:1 — every handle/descriptor lifecycle (create, set,
 //! destroy) is wrapped, plus the heuristic search and `matmul` itself.
+//!
+//! See the [hipBLASLt API reference](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 
 use super::sys::{self};
 use crate::hipblaslt::sys::hipblasLtMatmulAlgo_t;
@@ -29,6 +31,7 @@ impl std::fmt::Display for HipblasError {
 impl std::error::Error for HipblasError {}
 
 /// Creates a handle to the hipBLASLt library. Mirrors `cublasLtCreate`.
+/// Wraps `hipblasLtCreate`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn create_handle() -> Result<sys::hipblasLtHandle_t, HipblasError> {
     let mut handle = MaybeUninit::uninit();
     unsafe {
@@ -41,11 +44,13 @@ pub fn create_handle() -> Result<sys::hipblasLtHandle_t, HipblasError> {
 ///
 /// # Safety
 /// `handle` must not have been freed already.
+/// Wraps `hipblasLtDestroy`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn destroy_handle(handle: sys::hipblasLtHandle_t) -> Result<(), HipblasError> {
     unsafe { sys::hipblasLtDestroy(handle).result() }
 }
 
 /// Creates a matrix layout descriptor.
+/// Wraps `hipblasLtMatrixLayoutCreate`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn create_matrix_layout(
     matrix_type: sys::hipDataType,
     rows: u64,
@@ -70,6 +75,7 @@ pub fn create_matrix_layout(
 ///
 /// # Safety
 /// `matrix_layout` must not have been freed already.
+/// Wraps `hipblasLtMatrixLayoutSetAttribute`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn set_matrix_layout_attribute(
     matrix_layout: sys::hipblasLtMatrixLayout_t,
     attr: sys::hipblasLtMatrixLayoutAttribute_t,
@@ -85,6 +91,7 @@ pub fn set_matrix_layout_attribute(
 ///
 /// # Safety
 /// `matrix_layout` must not have been freed already.
+/// Wraps `hipblasLtMatrixLayoutDestroy`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn destroy_matrix_layout(
     matrix_layout: sys::hipblasLtMatrixLayout_t,
 ) -> Result<(), HipblasError> {
@@ -92,6 +99,7 @@ pub fn destroy_matrix_layout(
 }
 
 /// Creates a matrix multiply descriptor.
+/// Wraps `hipblasLtMatmulDescCreate`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn create_matmul_desc(
     compute_type: sys::hipblasComputeType_t,
     scale_type: sys::hipDataType,
@@ -108,6 +116,7 @@ pub fn create_matmul_desc(
 ///
 /// # Safety
 /// `matmul_desc` must not have been freed already.
+/// Wraps `hipblasLtMatmulDescSetAttribute`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn set_matmul_desc_attribute(
     matmul_desc: sys::hipblasLtMatmulDesc_t,
     attr: sys::hipblasLtMatmulDescAttributes_t,
@@ -123,6 +132,7 @@ pub fn set_matmul_desc_attribute(
 ///
 /// # Safety
 /// `matmul_desc` must not have been freed already.
+/// Wraps `hipblasLtMatmulDescDestroy`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn destroy_matmul_desc(
     matmul_desc: sys::hipblasLtMatmulDesc_t,
 ) -> Result<(), HipblasError> {
@@ -130,6 +140,7 @@ pub fn destroy_matmul_desc(
 }
 
 /// Creates a matrix multiply heuristic-search preferences descriptor.
+/// Wraps `hipblasLtMatmulPreferenceCreate`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn create_matmul_pref() -> Result<sys::hipblasLtMatmulPreference_t, HipblasError> {
     let mut matmul_pref = MaybeUninit::uninit();
     unsafe {
@@ -142,6 +153,7 @@ pub fn create_matmul_pref() -> Result<sys::hipblasLtMatmulPreference_t, HipblasE
 ///
 /// # Safety
 /// `matmul_pref` must not have been freed already.
+/// Wraps `hipblasLtMatmulPreferenceSetAttribute`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn set_matmul_pref_attribute(
     matmul_pref: sys::hipblasLtMatmulPreference_t,
     attr: sys::hipblasLtMatmulPreferenceAttributes_t,
@@ -158,6 +170,7 @@ pub fn set_matmul_pref_attribute(
 ///
 /// # Safety
 /// `matmul_pref` must not have been freed already.
+/// Wraps `hipblasLtMatmulPreferenceDestroy`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn destroy_matmul_pref(
     matmul_pref: sys::hipblasLtMatmulPreference_t,
 ) -> Result<(), HipblasError> {
@@ -172,6 +185,7 @@ pub fn destroy_matmul_pref(
 ///
 /// # Safety
 /// All sys objects must outlive this call and must not have been freed.
+/// Wraps `hipblasLtMatmulAlgoGetHeuristic`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn get_matmul_algo_heuristic(
     handle: sys::hipblasLtHandle_t,
     matmul_desc: sys::hipblasLtMatmulDesc_t,
@@ -219,6 +233,7 @@ pub fn get_matmul_algo_heuristic(
 /// All sys objects must outlive this call and must not have been freed.
 /// `workspace` must be at least `workspace_size` bytes.
 #[allow(clippy::too_many_arguments)]
+/// Wraps `hipblasLtMatmul`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
 pub fn matmul(
     handle: sys::hipblasLtHandle_t,
     matmul_desc: sys::hipblasLtMatmulDesc_t,
