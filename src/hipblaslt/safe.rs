@@ -456,12 +456,14 @@ impl Matmul<f32> for HipBlasLT {
         sys::hipDataType::HIP_R_32F
     }
 
-    /// **HIP note:** `HIPBLAS_COMPUTE_32F_FAST_TF32` is named for cudarc
-    /// shape parity, but TF32 is an NVIDIA tensor-core format. On most
-    /// AMD GPUs hipBLASLt will fall back to plain F32; CDNA3+ (gfx940+)
-    /// may have TF32-equivalent matrix paths.
+    /// **HIP note:** plain F32 compute. cudarc uses the `_FAST_TF32` variant
+    /// here, but TF32 is an NVIDIA tensor-core format with no RDNA equivalent —
+    /// the hipBLASLt heuristic does **not** fall back to F32, it just returns
+    /// zero solutions (`HIPBLAS_STATUS_NOT_SUPPORTED`). Plain `HIPBLAS_COMPUTE_32F`
+    /// is universally supported. (CDNA3+ exposes an xf32 path, but that's a
+    /// separate opt-in, not this enum.)
     fn compute_type() -> sys::hipblasComputeType_t {
-        sys::hipblasComputeType_t::HIPBLAS_COMPUTE_32F_FAST_TF32
+        sys::hipblasComputeType_t::HIPBLAS_COMPUTE_32F
     }
 }
 

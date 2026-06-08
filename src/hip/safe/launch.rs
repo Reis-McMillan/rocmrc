@@ -681,9 +681,11 @@ void slow_worker(int* out) {
             shared_mem_bytes: 0,
         };
 
-        // Sequential reference.
-        let start = ctx.new_event(None).unwrap();
-        let end = ctx.new_event(None).unwrap();
+        // Sequential reference. `Some(0)` = `hipEventDefault` (timing
+        // enabled); the default `None` disables timing, which makes
+        // `elapsed_ms` fail with `hipErrorInvalidHandle`.
+        let start = ctx.new_event(Some(0)).unwrap();
+        let end = ctx.new_event(Some(0)).unwrap();
         let f_ref = &f;
         let s1_ref = &s1;
         start.record(s1_ref).unwrap();
@@ -704,8 +706,8 @@ void slow_worker(int* out) {
         let sequential_ms = start.elapsed_ms(&end).unwrap();
 
         // Parallel.
-        let p_start = ctx.new_event(None).unwrap();
-        let p_end = ctx.new_event(None).unwrap();
+        let p_start = ctx.new_event(Some(0)).unwrap();
+        let p_end = ctx.new_event(Some(0)).unwrap();
         p_start.record(s1_ref).unwrap();
         s2.wait(&p_start).unwrap();
         unsafe {
@@ -748,8 +750,8 @@ void slow_worker(int* out) {
             shared_mem_bytes: 0,
         };
 
-        let start = ctx.new_event(None).unwrap();
-        let end = ctx.new_event(None).unwrap();
+        let start = ctx.new_event(Some(0)).unwrap();
+        let end = ctx.new_event(Some(0)).unwrap();
         start.record(&s1).unwrap();
         s2.wait(&start).unwrap();
         unsafe {

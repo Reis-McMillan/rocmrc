@@ -1007,7 +1007,12 @@ void check(float* buf, int n) {
 
     fn compile_check(ctx: &Arc<HipContext>) -> crate::hip::safe::HipFunction {
         let gfx = ctx.gfx_version().expect("unsupported gfx arch");
-        let hsaco = hiprtc::compile_hsaco(CHECK_KERNEL, gfx).unwrap();
+        // hipRTC has no device `assert` (unlike CUDA's NVRTC); define one that
+        // traps on failure so the kernel's checks surface as a stream error.
+        let src = format!(
+            "#define assert(cond) do {{ if (!(cond)) __builtin_trap(); }} while (0)\n{CHECK_KERNEL}"
+        );
+        let hsaco = hiprtc::compile_hsaco(&src, gfx).unwrap();
         let module = ctx.load_module(hsaco).unwrap();
         module.load_function("check").unwrap()
     }
