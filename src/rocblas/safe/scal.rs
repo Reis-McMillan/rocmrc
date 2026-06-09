@@ -11,11 +11,7 @@ pub struct ScalConfig<T> {
 
 pub trait Scal<T> {
     /// `x := alpha*x`.
-    fn scal<X: DevicePtrMut<T>>(
-        &self,
-        cfg: ScalConfig<T>,
-        x: &mut X,
-    ) -> Result<(), RocblasError>;
+    fn scal<X: DevicePtrMut<T>>(&self, cfg: ScalConfig<T>, x: &mut X) -> Result<(), RocblasError>;
 }
 
 impl Scal<f32> for RocBlas {
@@ -26,7 +22,13 @@ impl Scal<f32> for RocBlas {
     ) -> Result<(), RocblasError> {
         let (x, _record_x) = x.device_ptr_mut(&self.stream);
         unsafe {
-            result::sscal(self.handle, cfg.n, (&cfg.alpha) as *const _, x as *mut _, cfg.incx)
+            result::sscal(
+                self.handle,
+                cfg.n,
+                (&cfg.alpha) as *const _,
+                x as *mut _,
+                cfg.incx,
+            )
         }
     }
 }
@@ -39,7 +41,13 @@ impl Scal<f64> for RocBlas {
     ) -> Result<(), RocblasError> {
         let (x, _record_x) = x.device_ptr_mut(&self.stream);
         unsafe {
-            result::dscal(self.handle, cfg.n, (&cfg.alpha) as *const _, x as *mut _, cfg.incx)
+            result::dscal(
+                self.handle,
+                cfg.n,
+                (&cfg.alpha) as *const _,
+                x as *mut _,
+                cfg.incx,
+            )
         }
     }
 }
@@ -60,8 +68,15 @@ mod tests {
         let truth: Vec<f32> = x.iter().map(|v| alpha * v).collect();
 
         let mut x_dev = stream.clone_htod(&x).unwrap();
-        blas.scal(ScalConfig { n: 5, alpha, incx: 1 }, &mut x_dev)
-            .unwrap();
+        blas.scal(
+            ScalConfig {
+                n: 5,
+                alpha,
+                incx: 1,
+            },
+            &mut x_dev,
+        )
+        .unwrap();
 
         let found = stream.clone_dtoh(&x_dev).unwrap();
         for i in 0..5 {
@@ -80,8 +95,15 @@ mod tests {
         let truth: Vec<f64> = x.iter().map(|v| alpha * v).collect();
 
         let mut x_dev = stream.clone_htod(&x).unwrap();
-        blas.scal(ScalConfig { n: 5, alpha, incx: 1 }, &mut x_dev)
-            .unwrap();
+        blas.scal(
+            ScalConfig {
+                n: 5,
+                alpha,
+                incx: 1,
+            },
+            &mut x_dev,
+        )
+        .unwrap();
 
         let found = stream.clone_dtoh(&x_dev).unwrap();
         for i in 0..5 {

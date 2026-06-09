@@ -1,6 +1,6 @@
 use super::{result, result::RocblasError, sys};
-use crate::rocblas::RocBlas;
 use crate::hip::{DevicePtr, DevicePtrMut};
+use crate::rocblas::RocBlas;
 
 #[derive(Debug, Copy, Clone)]
 pub struct GemmConfig<T> {
@@ -141,11 +141,7 @@ impl Gemm<half::f16> for RocBlas {
 
 #[cfg(feature = "f16")]
 impl Gemm<half::bf16> for RocBlas {
-    fn gemm<
-        A: DevicePtr<half::bf16>,
-        B: DevicePtr<half::bf16>,
-        C: DevicePtrMut<half::bf16>,
-    >(
+    fn gemm<A: DevicePtr<half::bf16>, B: DevicePtr<half::bf16>, C: DevicePtrMut<half::bf16>>(
         &self,
         cfg: GemmConfig<half::bf16>,
         a: &A,

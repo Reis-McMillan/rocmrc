@@ -20,8 +20,8 @@ use std::sync::Arc;
 use crate::hip::{result, sys};
 
 use super::{
-    DevicePtr, DevicePtrMut, DeviceRepr, DeviceSlice, HipContext, HipError, HipEvent,
-    HipStream, HostSlice, LaunchArgs, PushKernelArg, SyncOnDrop, ValidAsZeroBits,
+    DevicePtr, DevicePtrMut, DeviceRepr, DeviceSlice, HipContext, HipError, HipEvent, HipStream,
+    HostSlice, LaunchArgs, PushKernelArg, SyncOnDrop, ValidAsZeroBits,
 };
 
 // HIP `#define` flag values that bindgen drops. Re-declared with the same
@@ -156,11 +156,13 @@ impl HipContext {
             MemAttachFlags::Host
         };
 
-        let bytes = len.checked_mul(std::mem::size_of::<T>()).expect("size overflow");
+        let bytes = len
+            .checked_mul(std::mem::size_of::<T>())
+            .expect("size overflow");
         let raw = result::malloc_managed(bytes, attach_mode.to_raw())?;
-        let concurrent_managed_access = self.attribute(
-            sys::hipDeviceAttribute_t::hipDeviceAttributeConcurrentManagedAccess,
-        )? != 0;
+        let concurrent_managed_access = self
+            .attribute(sys::hipDeviceAttribute_t::hipDeviceAttributeConcurrentManagedAccess)?
+            != 0;
 
         let stream = self.default_stream();
         // Blocking-sync event so `as_slice` / `as_mut_slice` block on the
@@ -475,11 +477,10 @@ impl<T> DeviceSlice<T> for HipUnifiedSlice<T> {
 }
 
 impl<T> DevicePtr<T> for HipUnifiedSlice<T> {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
-        stream.context().record_err(self.check_device_access(stream));
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
+        stream
+            .context()
+            .record_err(self.check_device_access(stream));
         stream.context().record_err(stream.wait(&self.event));
         (
             self.hip_device_ptr,
@@ -493,7 +494,9 @@ impl<T> DevicePtrMut<T> for HipUnifiedSlice<T> {
         &'a mut self,
         stream: &'a HipStream,
     ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
-        stream.context().record_err(self.check_device_access(stream));
+        stream
+            .context()
+            .record_err(self.check_device_access(stream));
         stream.context().record_err(stream.wait(&self.event));
         (
             self.hip_device_ptr,
@@ -534,7 +537,9 @@ impl<T> HostSlice<T> for HipUnifiedSlice<T> {
         &'a self,
         stream: &'a HipStream,
     ) -> (&'a [T], SyncOnDrop<'a>) {
-        stream.context().record_err(self.check_device_access(stream));
+        stream
+            .context()
+            .record_err(self.check_device_access(stream));
         stream.context().record_err(stream.wait(&self.event));
         (
             unsafe { std::slice::from_raw_parts(self.hip_device_ptr as *const T, self.len) },
@@ -546,7 +551,9 @@ impl<T> HostSlice<T> for HipUnifiedSlice<T> {
         &'a mut self,
         stream: &'a HipStream,
     ) -> (&'a mut [T], SyncOnDrop<'a>) {
-        stream.context().record_err(self.check_device_access(stream));
+        stream
+            .context()
+            .record_err(self.check_device_access(stream));
         stream.context().record_err(stream.wait(&self.event));
         (
             unsafe { std::slice::from_raw_parts_mut(self.hip_device_ptr as *mut T, self.len) },
@@ -610,10 +617,7 @@ impl<T> DeviceSlice<T> for HipUnifiedViewMut<'_, T> {
 }
 
 impl<T> DevicePtr<T> for HipUnifiedView<'_, T> {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
         stream.context().record_err(check_device_access(
             self.attach_mode,
             self.stream,
@@ -626,10 +630,7 @@ impl<T> DevicePtr<T> for HipUnifiedView<'_, T> {
 }
 
 impl<T> DevicePtr<T> for HipUnifiedViewMut<'_, T> {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
         stream.context().record_err(check_device_access(
             self.attach_mode,
             self.stream,
@@ -754,14 +755,13 @@ unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b HipUnifiedView<'c, T>> for 
         ));
         self.waits.push(arg.event);
         self.records.push(arg.event);
-        self.args.push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
+        self.args
+            .push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
         self
     }
 }
 
-unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b HipUnifiedViewMut<'c, T>>
-    for LaunchArgs<'a>
-{
+unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b HipUnifiedViewMut<'c, T>> for LaunchArgs<'a> {
     #[inline(always)]
     fn arg(&mut self, arg: &'b HipUnifiedViewMut<'c, T>) -> &mut Self {
         self.stream.context().record_err(check_device_access(
@@ -772,7 +772,8 @@ unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b HipUnifiedViewMut<'c, T>>
         ));
         self.waits.push(arg.event);
         self.records.push(arg.event);
-        self.args.push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
+        self.args
+            .push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
         self
     }
 }
@@ -790,7 +791,8 @@ unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b mut HipUnifiedViewMut<'c, T
         ));
         self.waits.push(arg.event);
         self.records.push(arg.event);
-        self.args.push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
+        self.args
+            .push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
         self
     }
 }

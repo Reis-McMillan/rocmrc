@@ -13,7 +13,7 @@ use syn::{
     ItemUse, Pat,
 };
 
-use crate::{module::ModuleConfig};
+use crate::module::ModuleConfig;
 use crate::version::Version;
 
 /// Build a unified adapter for a single foreign function.

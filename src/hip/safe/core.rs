@@ -18,8 +18,8 @@ use std::{
     marker::PhantomData,
     ops::{Bound, RangeBounds},
     sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
     },
 };
 
@@ -362,10 +362,7 @@ impl HipContext {
     /// Create a new event in this context. Default flag is
     /// `hipEventDisableTiming` (no elapsed-time tracking) — pass
     /// `Some(0)` for a full event or other flag combinations.
-    pub fn new_event(
-        self: &Arc<Self>,
-        flags: Option<c_uint>,
-    ) -> Result<HipEvent, HipError> {
+    pub fn new_event(self: &Arc<Self>, flags: Option<c_uint>) -> Result<HipEvent, HipError> {
         let flags = flags.unwrap_or(HIP_EVENT_DISABLE_TIMING);
         self.bind_to_thread()?;
         let hip_event = result::event::create_with_flags(flags)?;
@@ -503,11 +500,10 @@ impl HipContext {
         if prev == 0 && self.is_event_tracking() {
             self.synchronize()?;
         }
-        let hip_stream =
-            result::stream::create_with_priority(
-                result::stream::StreamKind::NonBlocking,
-                priority,
-            )?;
+        let hip_stream = result::stream::create_with_priority(
+            result::stream::StreamKind::NonBlocking,
+            priority,
+        )?;
         Ok(Arc::new(HipStream {
             hip_stream,
             ctx: self.clone(),
@@ -589,7 +585,10 @@ impl HipStream {
         len: usize,
     ) -> Result<HipSlice<T>, HipError> {
         let (read, write) = if self.ctx.is_event_tracking() {
-            (Some(self.ctx.new_event(None)?), Some(self.ctx.new_event(None)?))
+            (
+                Some(self.ctx.new_event(None)?),
+                Some(self.ctx.new_event(None)?),
+            )
         } else {
             (None, None)
         };
@@ -680,10 +679,7 @@ pub trait DeviceSlice<T> {
 /// Read access to a device pointer. Inserts an event wait for the slice's
 /// last write (if tracking is on) before returning.
 pub trait DevicePtr<T>: DeviceSlice<T> {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>);
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>);
 }
 
 /// Write access. Inserts event waits for the slice's last *read and write*
@@ -709,10 +705,8 @@ pub trait HostSlice<T> {
     /// The returned slice must not outlive the underlying storage. The
     /// returned `SyncOnDrop` must be dropped before the host buffer is
     /// reused or freed.
-    unsafe fn stream_synced_slice<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (&'a [T], SyncOnDrop<'a>);
+    unsafe fn stream_synced_slice<'a>(&'a self, stream: &'a HipStream)
+    -> (&'a [T], SyncOnDrop<'a>);
 
     /// # Safety
     /// Same as [`Self::stream_synced_slice`]; additionally the caller must
@@ -1111,9 +1105,8 @@ impl<T> HipSlice<T> {
     /// Borrow a sub-range as a [`HipView`].
     pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> HipView<'_, T> {
         let (start, end) = resolve_range(range, self.len);
-        let ptr = unsafe {
-            (self.hip_device_ptr as *mut u8).add(start * std::mem::size_of::<T>())
-        } as sys::hipDeviceptr_t;
+        let ptr = unsafe { (self.hip_device_ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
+            as sys::hipDeviceptr_t;
         HipView {
             ptr,
             len: end - start,
@@ -1127,9 +1120,8 @@ impl<T> HipSlice<T> {
     /// Borrow a sub-range as a [`HipViewMut`].
     pub fn slice_mut<R: RangeBounds<usize>>(&mut self, range: R) -> HipViewMut<'_, T> {
         let (start, end) = resolve_range(range, self.len);
-        let ptr = unsafe {
-            (self.hip_device_ptr as *mut u8).add(start * std::mem::size_of::<T>())
-        } as sys::hipDeviceptr_t;
+        let ptr = unsafe { (self.hip_device_ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
+            as sys::hipDeviceptr_t;
         HipViewMut {
             ptr,
             len: end - start,
@@ -1152,9 +1144,8 @@ impl<'a, T> HipView<'a, T> {
     /// Sub-view of the current view.
     pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> HipView<'_, T> {
         let (start, end) = resolve_range(range, self.len);
-        let ptr =
-            unsafe { (self.ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
-                as sys::hipDeviceptr_t;
+        let ptr = unsafe { (self.ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
+            as sys::hipDeviceptr_t;
         HipView {
             ptr,
             len: end - start,
@@ -1189,9 +1180,8 @@ impl<'a, T> HipViewMut<'a, T> {
     /// Sub-view of the current mutable view (immutable).
     pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> HipView<'_, T> {
         let (start, end) = resolve_range(range, self.len);
-        let ptr =
-            unsafe { (self.ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
-                as sys::hipDeviceptr_t;
+        let ptr = unsafe { (self.ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
+            as sys::hipDeviceptr_t;
         HipView {
             ptr,
             len: end - start,
@@ -1205,9 +1195,8 @@ impl<'a, T> HipViewMut<'a, T> {
     /// Mutable sub-view of the current mutable view.
     pub fn slice_mut<R: RangeBounds<usize>>(&mut self, range: R) -> HipViewMut<'_, T> {
         let (start, end) = resolve_range(range, self.len);
-        let ptr =
-            unsafe { (self.ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
-                as sys::hipDeviceptr_t;
+        let ptr = unsafe { (self.ptr as *mut u8).add(start * std::mem::size_of::<T>()) }
+            as sys::hipDeviceptr_t;
         HipViewMut {
             ptr,
             len: end - start,
@@ -1230,7 +1219,10 @@ fn resolve_range<R: RangeBounds<usize>>(range: R, total_len: usize) -> (usize, u
         Bound::Excluded(&n) => n,
         Bound::Unbounded => total_len,
     };
-    assert!(start <= end && end <= total_len, "slice range out of bounds");
+    assert!(
+        start <= end && end <= total_len,
+        "slice range out of bounds"
+    );
     (start, end)
 }
 
@@ -1266,10 +1258,7 @@ impl<T> DeviceSlice<T> for HipViewMut<'_, T> {
 }
 
 impl<T> DevicePtr<T> for HipSlice<T> {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
         if self.stream.ctx.is_managing_stream_synchronization() {
             if let Some(write) = self.write.as_ref() {
                 stream.ctx.record_err(stream.wait(write));
@@ -1283,10 +1272,7 @@ impl<T> DevicePtr<T> for HipSlice<T> {
 }
 
 impl<T> DevicePtr<T> for HipView<'_, T> {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
         if self.stream.ctx.is_managing_stream_synchronization() {
             if let Some(write) = self.write.as_ref() {
                 stream.ctx.record_err(stream.wait(write));
@@ -1297,10 +1283,7 @@ impl<T> DevicePtr<T> for HipView<'_, T> {
 }
 
 impl<T> DevicePtr<T> for HipViewMut<'_, T> {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
         if self.stream.ctx.is_managing_stream_synchronization() {
             if let Some(write) = self.write.as_ref() {
                 stream.ctx.record_err(stream.wait(write));
@@ -1365,14 +1348,19 @@ impl HipStream {
         len: usize,
     ) -> Result<HipSlice<T>, HipError> {
         self.ctx.bind_to_thread()?;
-        let bytes = len.checked_mul(std::mem::size_of::<T>()).expect("size overflow");
+        let bytes = len
+            .checked_mul(std::mem::size_of::<T>())
+            .expect("size overflow");
         let raw = if self.ctx.has_async_alloc {
             result::malloc_async(bytes, self.hip_stream)?
         } else {
             result::malloc_sync(bytes)?
         };
         let (read, write) = if self.ctx.is_event_tracking() {
-            (Some(self.ctx.new_event(None)?), Some(self.ctx.new_event(None)?))
+            (
+                Some(self.ctx.new_event(None)?),
+                Some(self.ctx.new_event(None)?),
+            )
         } else {
             (None, None)
         };
@@ -1450,9 +1438,8 @@ impl HipStream {
         let bytes = src.len() * std::mem::size_of::<T>();
         let (src_slice, _record_src) = unsafe { src.stream_synced_slice(self) };
         let (dptr, _record_dst) = dst.device_ptr_mut(self);
-        let src_bytes = unsafe {
-            std::slice::from_raw_parts(src_slice.as_ptr() as *const u8, bytes)
-        };
+        let src_bytes =
+            unsafe { std::slice::from_raw_parts(src_slice.as_ptr() as *const u8, bytes) };
         unsafe { result::memcpy_htod_async(dptr as u64, src_bytes, self.hip_stream) }
     }
 
@@ -1468,9 +1455,8 @@ impl HipStream {
         let bytes = src.len() * std::mem::size_of::<T>();
         let (sptr, _record_src) = src.device_ptr(self);
         let (dst_slice, _record_dst) = unsafe { dst.stream_synced_mut_slice(self) };
-        let dst_bytes = unsafe {
-            std::slice::from_raw_parts_mut(dst_slice.as_mut_ptr() as *mut u8, bytes)
-        };
+        let dst_bytes =
+            unsafe { std::slice::from_raw_parts_mut(dst_slice.as_mut_ptr() as *mut u8, bytes) };
         unsafe { result::memcpy_dtoh_async(dst_bytes, sptr as u64, self.hip_stream) }
     }
 
@@ -1482,7 +1468,7 @@ impl HipStream {
     ) -> Result<(), HipError> {
         assert!(dst.len() >= src.len(), "memcpy_dtod: dst smaller than src");
         self.ctx.bind_to_thread()?;
-        
+
         let bytes = src.len() * std::mem::size_of::<T>();
 
         let src_ctx = src.stream().context();
@@ -1490,8 +1476,8 @@ impl HipStream {
 
         if src_ctx == dst_ctx {
             let (sptr, _record_src) = src.device_ptr(self);
-        let (dptr, _record_dst) = dst.device_ptr_mut(self);
-        unsafe { result::memcpy_dtod_async(dptr as u64, sptr as u64, bytes, self.hip_stream) }
+            let (dptr, _record_dst) = dst.device_ptr_mut(self);
+            unsafe { result::memcpy_dtod_async(dptr as u64, sptr as u64, bytes, self.hip_stream) }
         } else {
             let (sptr, _record_src) = src.device_ptr(src.stream());
             let (dptr, _record_dsdt) = dst.device_ptr_mut(self);
@@ -1503,7 +1489,7 @@ impl HipStream {
                     sptr as u64,
                     src_ctx.ordinal() as c_int,
                     bytes,
-                    self.hip_stream
+                    self.hip_stream,
                 )
             }
         }
@@ -1558,7 +1544,9 @@ impl HipContext {
         len: usize,
     ) -> Result<PinnedHostSlice<T>, HipError> {
         self.bind_to_thread()?;
-        let bytes = len.checked_mul(std::mem::size_of::<T>()).expect("size overflow");
+        let bytes = len
+            .checked_mul(std::mem::size_of::<T>())
+            .expect("size overflow");
         let ptr = result::malloc_host(bytes, HIP_HOST_MALLOC_WRITE_COMBINED)? as *mut T;
         assert!(!ptr.is_null());
         let event = self.new_event(Some(HIP_EVENT_BLOCKING_SYNC))?;
@@ -1682,8 +1670,8 @@ impl HipContext {
 impl HipModule {
     /// Look up a kernel by name within this module.
     pub fn load_function(self: &Arc<Self>, name: &str) -> Result<HipFunction, HipError> {
-        let cname = CString::new(name)
-            .map_err(|_| HipError(sys::hipError_t::hipErrorInvalidValue))?;
+        let cname =
+            CString::new(name).map_err(|_| HipError(sys::hipError_t::hipErrorInvalidValue))?;
         let hip_function = result::module::get_function(self.hip_module, cname.as_c_str())?;
         Ok(HipFunction {
             hip_function,
@@ -1699,10 +1687,9 @@ impl HipModule {
         name: &str,
         stream: &'a Arc<HipStream>,
     ) -> Result<HipViewMut<'a, u8>, HipError> {
-        let cname = CString::new(name)
-            .map_err(|_| HipError(sys::hipError_t::hipErrorInvalidValue))?;
-        let (raw_ptr, bytes) =
-            result::module::get_global(self.hip_module, cname.as_c_str())?;
+        let cname =
+            CString::new(name).map_err(|_| HipError(sys::hipError_t::hipErrorInvalidValue))?;
+        let (raw_ptr, bytes) = result::module::get_global(self.hip_module, cname.as_c_str())?;
         Ok(HipViewMut {
             ptr: raw_ptr as sys::hipDeviceptr_t,
             len: bytes,
@@ -1749,10 +1736,7 @@ impl HipFunction {
         self.hip_function
     }
 
-    pub fn get_attribute(
-        &self,
-        attribute: sys::hipFunction_attribute,
-    ) -> Result<i32, HipError> {
+    pub fn get_attribute(&self, attribute: sys::hipFunction_attribute) -> Result<i32, HipError> {
         result::function::get_function_attribute(self.hip_function, attribute)
     }
 
@@ -1916,7 +1900,10 @@ mod tests {
         ctx.synchronize().unwrap();
         let (free2, _) = ctx.mem_get_info().unwrap();
         assert!(free2 > free1, "free memory did not recover after drop");
-        assert_eq!(free2, free0, "freed memory did not match pre-allocated memory")
+        assert_eq!(
+            free2, free0,
+            "freed memory did not match pre-allocated memory"
+        )
     }
 
     #[test]
@@ -1943,8 +1930,7 @@ mod tests {
         let buf: HipSlice<f32> = stream.clone_htod(&[1.0_f32, 2.0, 3.0, 4.0]).unwrap();
         let (raw, len) = buf.leak();
         assert_eq!(len, 4);
-        let rebuilt: HipSlice<f32> =
-            unsafe { stream.upgrade_device_ptr(raw, len) }.unwrap();
+        let rebuilt: HipSlice<f32> = unsafe { stream.upgrade_device_ptr(raw, len) }.unwrap();
         let out: Vec<f32> = stream.clone_dtoh(&rebuilt).unwrap();
         assert_eq!(out, vec![1.0, 2.0, 3.0, 4.0]);
     }

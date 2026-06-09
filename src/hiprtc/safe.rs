@@ -8,8 +8,8 @@
 
 use super::{result, sys};
 
-use std::borrow::Cow;
 use core::ffi::{CStr, c_char};
+use std::borrow::Cow;
 use std::ffi::CString;
 use std::fmt;
 use std::path::PathBuf;
@@ -116,7 +116,9 @@ impl FromStr for GfxVersion {
             "gfx1102" => Ok(Self::Gfx1102),
             "gfx1200" => Ok(Self::Gfx1200),
             "gfx1201" => Ok(Self::Gfx1201),
-            _ => Err(format!("Unknown or unsupported AMD GPU architecture: '{s}'")),
+            _ => Err(format!(
+                "Unknown or unsupported AMD GPU architecture: '{s}'"
+            )),
         }
     }
 }
@@ -180,17 +182,13 @@ pub(crate) struct Program {
 }
 
 impl Program {
-    pub(crate) fn create<S: AsRef<str>>(
-        src: S,
-        name: Option<&str>,
-    ) -> Result<Self, CompileError> {
+    pub(crate) fn create<S: AsRef<str>>(src: S, name: Option<&str>) -> Result<Self, CompileError> {
         let src = CString::new(src.as_ref().as_bytes())
             .expect("program code cannot contain null terminators");
-        let name = name.map(|s| {
-            CString::new(s).expect("program name cannot contain null terminators")
-        });
-        let prog = result::create_program(&src, name.as_deref())
-            .map_err(CompileError::CreationError)?;
+        let name =
+            name.map(|s| CString::new(s).expect("program name cannot contain null terminators"));
+        let prog =
+            result::create_program(&src, name.as_deref()).map_err(CompileError::CreationError)?;
         Ok(Self {
             prog,
             _src: src,
@@ -216,8 +214,7 @@ impl Program {
             }
         })?;
 
-        let bytes_c =
-            result::get_hsaco(self.prog).map_err(CompileError::GetHsacoError)?;
+        let bytes_c = result::get_hsaco(self.prog).map_err(CompileError::GetHsacoError)?;
         // `result::get_hsaco` returns Vec<c_char>; HSACO is binary bytes.
         // c_char is i8 on most platforms — same bit pattern, just a
         // signedness flip. Zero-copy reinterpret.
@@ -345,7 +342,10 @@ mod tests {
 
     #[test]
     fn gfx_from_str_canonical() {
-        assert_eq!("gfx1100".parse::<GfxVersion>().unwrap(), GfxVersion::Gfx1100);
+        assert_eq!(
+            "gfx1100".parse::<GfxVersion>().unwrap(),
+            GfxVersion::Gfx1100
+        );
     }
 
     #[test]

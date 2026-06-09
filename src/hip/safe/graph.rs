@@ -42,10 +42,7 @@ impl Drop for HipGraph {
 
 impl HipStream {
     /// Start capturing operations enqueued on this stream into a graph.
-    pub fn begin_capture(
-        &self,
-        mode: sys::hipStreamCaptureMode,
-    ) -> Result<(), HipError> {
+    pub fn begin_capture(&self, mode: sys::hipStreamCaptureMode) -> Result<(), HipError> {
         self.context().bind_to_thread()?;
         unsafe { result::stream::begin_capture(self.hip_stream(), mode) }
     }

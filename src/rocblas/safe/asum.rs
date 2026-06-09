@@ -1,10 +1,10 @@
 use super::{result, result::RocblasError, sys};
-use crate::rocblas::RocBlas;
 use crate::hip::DevicePtr;
+use crate::rocblas::RocBlas;
 
 pub struct AsumConfig {
     pub n: sys::rocblas_int,
-    pub incx: sys::rocblas_int
+    pub incx: sys::rocblas_int,
 }
 
 pub trait Asum<T> {
@@ -12,7 +12,7 @@ pub trait Asum<T> {
         &self,
         cfg: AsumConfig,
         x: &X,
-        result: &mut T
+        result: &mut T,
     ) -> Result<(), RocblasError>;
 }
 

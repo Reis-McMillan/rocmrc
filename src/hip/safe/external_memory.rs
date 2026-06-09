@@ -62,10 +62,7 @@ impl HipContext {
         #[cfg(windows)]
         let external_memory = unsafe {
             use std::os::windows::io::AsRawHandle;
-            result::external_memory::import_external_memory_opaque_win32(
-                file.as_raw_handle(),
-                size,
-            )
+            result::external_memory::import_external_memory_opaque_win32(file.as_raw_handle(), size)
         }?;
         Ok(ExternalMemory {
             external_memory,
@@ -145,10 +142,7 @@ impl DeviceSlice<u8> for MappedBuffer {
 }
 
 impl DevicePtr<u8> for MappedBuffer {
-    fn device_ptr<'a>(
-        &'a self,
-        stream: &'a HipStream,
-    ) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
+    fn device_ptr<'a>(&'a self, stream: &'a HipStream) -> (sys::hipDeviceptr_t, SyncOnDrop<'a>) {
         // Read-only mapping (no `DevicePtrMut` impl), so no pre-wait
         // is needed. Still record the read so downstream consumers
         // observe it.

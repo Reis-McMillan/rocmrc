@@ -13,7 +13,10 @@ use rocmrc::rocblas::{
 fn main() {
     let ctx = HipContext::new(0).expect("HipContext");
     let stream = ctx.default_stream();
-    println!("device  = {}", ctx.name().unwrap_or_else(|_| "<unknown>".into()));
+    println!(
+        "device  = {}",
+        ctx.name().unwrap_or_else(|_| "<unknown>".into())
+    );
 
     let handle = RocBlas::new(stream.clone()).expect("RocBlas");
 
@@ -67,13 +70,25 @@ fn main() {
 
     // scal: x := 2*x
     handle
-        .scal(ScalConfig { n: M as i32, alpha: 2.0f32, incx: 1 }, &mut d_x)
+        .scal(
+            ScalConfig {
+                n: M as i32,
+                alpha: 2.0f32,
+                incx: 1,
+            },
+            &mut d_x,
+        )
         .expect("scal");
 
     // axpy: y := 3*x + y
     handle
         .axpy(
-            AxpyConfig { n: M as i32, alpha: 3.0f32, incx: 1, incy: 1 },
+            AxpyConfig {
+                n: M as i32,
+                alpha: 3.0f32,
+                incx: 1,
+                incy: 1,
+            },
             &d_x,
             &mut d_y,
         )
@@ -84,7 +99,11 @@ fn main() {
     // explicit type via UFCS. (scal/axpy can infer T from `alpha: T` in cfg.)
     BlasCopy::<f32>::copy(
         &handle,
-        CopyConfig { n: M as i32, incx: 1, incy: 1 },
+        CopyConfig {
+            n: M as i32,
+            incx: 1,
+            incy: 1,
+        },
         &d_y,
         &mut d_z,
     )
@@ -97,7 +116,11 @@ fn main() {
     let mut dot_val = 0.0f32;
     Dot::<f32>::dot(
         &handle,
-        DotConfig { n: M as i32, incx: 1, incy: 1 },
+        DotConfig {
+            n: M as i32,
+            incx: 1,
+            incy: 1,
+        },
         &d_x,
         &d_z,
         &mut dot_val,
@@ -108,7 +131,10 @@ fn main() {
     let mut nrm_val = 0.0f32;
     Nrm2::<f32>::nrm2(
         &handle,
-        Nrm2Config { n: M as i32, incx: 1 },
+        Nrm2Config {
+            n: M as i32,
+            incx: 1,
+        },
         &d_x,
         &mut nrm_val,
     )
@@ -127,8 +153,14 @@ fn main() {
 
     let dot_err = (dot_val - dot_ref).abs() / dot_ref.abs().max(1e-6);
     let nrm_err = (nrm_val - nrm_ref).abs() / nrm_ref.abs().max(1e-6);
-    println!("dot     = {} (ref {}), rel err {:.3e}", dot_val, dot_ref, dot_err);
-    println!("nrm2(x) = {} (ref {}), rel err {:.3e}", nrm_val, nrm_ref, nrm_err);
+    println!(
+        "dot     = {} (ref {}), rel err {:.3e}",
+        dot_val, dot_ref, dot_err
+    );
+    println!(
+        "nrm2(x) = {} (ref {}), rel err {:.3e}",
+        nrm_val, nrm_ref, nrm_err
+    );
     assert!(dot_err < 1e-4 && nrm_err < 1e-4, "L1 precision");
 
     println!("ok");

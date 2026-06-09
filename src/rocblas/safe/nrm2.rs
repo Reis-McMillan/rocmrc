@@ -25,7 +25,15 @@ impl Nrm2<f32> for RocBlas {
         result: &mut f32,
     ) -> Result<(), RocblasError> {
         let (x, _record_x) = x.device_ptr(&self.stream);
-        unsafe { result::snrm2(self.handle, cfg.n, x as *const _, cfg.incx, result as *mut _) }
+        unsafe {
+            result::snrm2(
+                self.handle,
+                cfg.n,
+                x as *const _,
+                cfg.incx,
+                result as *mut _,
+            )
+        }
     }
 }
 
@@ -37,7 +45,15 @@ impl Nrm2<f64> for RocBlas {
         result: &mut f64,
     ) -> Result<(), RocblasError> {
         let (x, _record_x) = x.device_ptr(&self.stream);
-        unsafe { result::dnrm2(self.handle, cfg.n, x as *const _, cfg.incx, result as *mut _) }
+        unsafe {
+            result::dnrm2(
+                self.handle,
+                cfg.n,
+                x as *const _,
+                cfg.incx,
+                result as *mut _,
+            )
+        }
     }
 }
 
@@ -59,7 +75,10 @@ mod tests {
         let mut found = 0.0f32;
         blas.nrm2(Nrm2Config { n: 5, incx: 1 }, &x_dev, &mut found)
             .unwrap();
-        assert!((found - truth).abs() <= 1e-5, "found={found}, truth={truth}");
+        assert!(
+            (found - truth).abs() <= 1e-5,
+            "found={found}, truth={truth}"
+        );
     }
 
     #[test]
@@ -75,6 +94,9 @@ mod tests {
         let mut found = 0.0f64;
         blas.nrm2(Nrm2Config { n: 5, incx: 1 }, &x_dev, &mut found)
             .unwrap();
-        assert!((found - truth).abs() <= 1e-12, "found={found}, truth={truth}");
+        assert!(
+            (found - truth).abs() <= 1e-12,
+            "found={found}, truth={truth}"
+        );
     }
 }

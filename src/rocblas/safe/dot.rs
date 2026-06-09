@@ -96,7 +96,10 @@ mod tests {
             &mut found,
         )
         .unwrap();
-        assert!((found - truth).abs() <= 1e-5, "found={found}, truth={truth}");
+        assert!(
+            (found - truth).abs() <= 1e-5,
+            "found={found}, truth={truth}"
+        );
     }
 
     #[test]
@@ -123,6 +126,9 @@ mod tests {
             &mut found,
         )
         .unwrap();
-        assert!((found - truth).abs() <= 1e-12, "found={found}, truth={truth}");
+        assert!(
+            (found - truth).abs() <= 1e-12,
+            "found={found}, truth={truth}"
+        );
     }
 }

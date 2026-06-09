@@ -41,7 +41,8 @@ pub fn create_program(src: &CStr, name: Option<&CStr>) -> Result<sys::hiprtcProg
             0,
             std::ptr::null(),
             std::ptr::null(),
-        ).result()?
+        )
+        .result()?
     };
     Ok(unsafe { prog.assume_init() })
 }
@@ -49,7 +50,7 @@ pub fn create_program(src: &CStr, name: Option<&CStr>) -> Result<sys::hiprtcProg
 /// Wraps `hiprtcCompileProgram`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
 pub fn compile_program<O: Clone + Into<Vec<u8>>>(
     prog: sys::hiprtcProgram,
-    options: &[O]
+    options: &[O],
 ) -> Result<(), HiprtcError> {
     let c_strings: Vec<CString> = options
         .iter()
@@ -58,18 +59,12 @@ pub fn compile_program<O: Clone + Into<Vec<u8>>>(
         .collect();
     let c_strs: Vec<&CStr> = c_strings.iter().map(CString::as_c_str).collect();
     let opts: Vec<*const c_char> = c_strs.iter().cloned().map(CStr::as_ptr).collect();
-    unsafe {
-        sys::hiprtcCompileProgram(
-            prog,
-            opts.len() as c_int,
-            opts.as_ptr()
-        ).result()
-    }
+    unsafe { sys::hiprtcCompileProgram(prog, opts.len() as c_int, opts.as_ptr()).result() }
 }
 
 /// Wraps `hiprtcDestroyProgram`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).
 pub fn destroy_program(mut prog: sys::hiprtcProgram) -> Result<(), HiprtcError> {
-    unsafe{ sys::hiprtcDestroyProgram(&mut prog).result() }
+    unsafe { sys::hiprtcDestroyProgram(&mut prog).result() }
 }
 
 /// Wraps `hiprtcGetCode / hiprtcGetCodeSize`. See the [hipRTC docs](https://rocm.docs.amd.com/projects/HIP/en/latest/).

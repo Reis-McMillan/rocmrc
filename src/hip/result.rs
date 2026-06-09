@@ -27,9 +27,8 @@
 //!
 //! See the [HIP Runtime API reference](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/index.html).
 
-pub use super::{sys};
+pub use super::sys;
 use core::ffi::{CStr, c_int, c_uint, c_void};
-
 
 pub struct HipError(pub sys::hipError_t);
 
@@ -37,8 +36,8 @@ impl sys::hipError_t {
     #[inline]
     pub fn result(self) -> Result<(), HipError> {
         match self {
-           sys::hipError_t::hipSuccess => Ok(()),
-           _ => Err(HipError(self)),
+            sys::hipError_t::hipSuccess => Ok(()),
+            _ => Err(HipError(self)),
         }
     }
 }
@@ -56,9 +55,9 @@ impl HipError {
 impl std::fmt::Debug for HipError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("HipError")
-        .field(&self.0)
-        .field(&self.error_string())
-        .finish()
+            .field(&self.0)
+            .field(&self.error_string())
+            .finish()
     }
 }
 
@@ -77,8 +76,8 @@ pub fn init() -> Result<(), HipError> {
 
 pub mod version {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
     use core::ffi::c_int;
 
@@ -101,10 +100,10 @@ pub mod version {
 
 pub mod device {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
-    use core::ffi::{c_int, c_uint, CStr};
+    use core::ffi::{CStr, c_int, c_uint};
     use core::mem::MaybeUninit;
     use std::string::String;
 
@@ -117,7 +116,7 @@ pub mod device {
 
     pub fn get_device(ordinal: *mut i32) -> Result<(), HipError> {
         unsafe { sys::hipGetDevice(ordinal).result() }
-    } 
+    }
 
     /// Bind `ordinal` as the calling thread's current device. **rocmrc-only:**
     /// cudarc has no equivalent; CUDA forces callers through
@@ -175,9 +174,7 @@ pub mod device {
     /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
     pub fn get_name(dev: sys::hipDevice_t) -> Result<String, HipError> {
         let mut buf = [0 as core::ffi::c_char; 256];
-        unsafe {
-            sys::hipDeviceGetName(buf.as_mut_ptr(), buf.len() as c_int, dev).result()?
-        };
+        unsafe { sys::hipDeviceGetName(buf.as_mut_ptr(), buf.len() as c_int, dev).result()? };
         let cstr = unsafe { CStr::from_ptr(buf.as_ptr()) };
         Ok(cstr.to_string_lossy().into_owned())
     }
@@ -265,18 +262,11 @@ pub mod device {
     }
 
     /// See [HIP Device Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___device.html).
-    pub fn can_access_peer(
-        device_id: c_int,
-        peer_id: c_int
-    ) -> Result<bool, HipError> {
+    pub fn can_access_peer(device_id: c_int, peer_id: c_int) -> Result<bool, HipError> {
         let mut can_access: i32 = 0;
-        unsafe { sys::hipDeviceCanAccessPeer(
-            &mut can_access,
-            device_id,
-            peer_id
-        ).result()? };
+        unsafe { sys::hipDeviceCanAccessPeer(&mut can_access, device_id, peer_id).result()? };
         Ok(can_access != 0)
-    } 
+    }
 }
 
 /// Function attributes — driver-API reads only.
@@ -300,8 +290,8 @@ pub mod device {
 /// surface (`hipFuncAttribute`) supports.
 pub mod function {
     use super::{
-        sys::{self, hipFunction_attribute},
         HipError,
+        sys::{self, hipFunction_attribute},
     };
     use core::ffi::c_int;
 
@@ -319,8 +309,8 @@ pub mod function {
 
 pub mod occupancy {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
     use core::ffi::{c_int, c_uint, c_void};
 
@@ -424,13 +414,8 @@ pub mod occupancy {
     ) -> Result<usize, HipError> {
         let mut bytes: usize = 0;
         unsafe {
-            sys::hipOccupancyAvailableDynamicSMemPerBlock(
-                &mut bytes,
-                f,
-                num_blocks,
-                block_size,
-            )
-            .result()?
+            sys::hipOccupancyAvailableDynamicSMemPerBlock(&mut bytes, f, num_blocks, block_size)
+                .result()?
         };
         Ok(bytes)
     }
@@ -438,8 +423,8 @@ pub mod occupancy {
 
 pub mod stream {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
     use core::ffi::{c_int, c_uint};
 
@@ -482,9 +467,7 @@ pub mod stream {
         priority: c_int,
     ) -> Result<sys::hipStream_t, HipError> {
         let mut s: sys::hipStream_t = std::ptr::null_mut();
-        unsafe {
-            sys::hipStreamCreateWithPriority(&mut s, kind.to_raw(), priority).result()?
-        };
+        unsafe { sys::hipStreamCreateWithPriority(&mut s, kind.to_raw(), priority).result()? };
         Ok(s)
     }
 
@@ -662,9 +645,7 @@ pub unsafe fn mem_advise(
     advice: sys::hipMemoryAdvise,
     device: c_int,
 ) -> Result<(), HipError> {
-    unsafe {
-        sys::hipMemAdvise(ptr as *const c_void, bytes, advice, device).result()
-    }
+    unsafe { sys::hipMemAdvise(ptr as *const c_void, bytes, advice, device).result() }
 }
 
 /// See [HIP Memory Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html).
@@ -674,9 +655,7 @@ pub unsafe fn mem_prefetch_async(
     device: c_int,
     stream: sys::hipStream_t,
 ) -> Result<(), HipError> {
-    unsafe {
-        sys::hipMemPrefetchAsync(ptr as *const c_void, bytes, device, stream).result()
-    }
+    unsafe { sys::hipMemPrefetchAsync(ptr as *const c_void, bytes, device, stream).result() }
 }
 
 /// `(free, total)` bytes for the current device.
@@ -700,9 +679,7 @@ pub unsafe fn memset_d8_async(
     bytes: usize,
     stream: sys::hipStream_t,
 ) -> Result<(), HipError> {
-    unsafe {
-        sys::hipMemsetD8Async(ptr as sys::hipDeviceptr_t, value, bytes, stream).result()
-    }
+    unsafe { sys::hipMemsetD8Async(ptr as sys::hipDeviceptr_t, value, bytes, stream).result() }
 }
 
 /// # Safety
@@ -840,10 +817,10 @@ pub unsafe fn memcpy_peer_async(
 
 pub mod module {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
-    use core::ffi::{c_void, CStr};
+    use core::ffi::{CStr, c_void};
 
     /// # Safety
     /// `image` must be a properly-formed hsaco / fatbin code-object blob.
@@ -851,9 +828,7 @@ pub mod module {
     /// See [HIP Module Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___module.html).
     pub unsafe fn load_data(image: &[u8]) -> Result<sys::hipModule_t, HipError> {
         let mut m: sys::hipModule_t = std::ptr::null_mut();
-        unsafe {
-            sys::hipModuleLoadData(&mut m, image.as_ptr() as *const c_void).result()?
-        };
+        unsafe { sys::hipModuleLoadData(&mut m, image.as_ptr() as *const c_void).result()? };
         Ok(m)
     }
 
@@ -868,10 +843,7 @@ pub mod module {
     /// variant — callers with a `&str` should convert via `CString::new(...)`
     /// at the boundary.
     /// See [HIP Module Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___module.html).
-    pub fn get_function(
-        m: sys::hipModule_t,
-        name: &CStr,
-    ) -> Result<sys::hipFunction_t, HipError> {
+    pub fn get_function(m: sys::hipModule_t, name: &CStr) -> Result<sys::hipFunction_t, HipError> {
         let mut f: sys::hipFunction_t = std::ptr::null_mut();
         unsafe { sys::hipModuleGetFunction(&mut f, m, name.as_ptr()).result()? };
         Ok(f)
@@ -879,23 +851,18 @@ pub mod module {
 
     /// Returns `(device_ptr, size_in_bytes)` for a `__device__` global by name.
     /// See [HIP Module Management docs](https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___module.html).
-    pub fn get_global(
-        m: sys::hipModule_t,
-        name: &CStr,
-    ) -> Result<(u64, usize), HipError> {
+    pub fn get_global(m: sys::hipModule_t, name: &CStr) -> Result<(u64, usize), HipError> {
         let mut ptr: sys::hipDeviceptr_t = 0 as sys::hipDeviceptr_t;
         let mut size: usize = 0;
-        unsafe {
-            sys::hipModuleGetGlobal(&mut ptr, &mut size, m, name.as_ptr()).result()?
-        };
+        unsafe { sys::hipModuleGetGlobal(&mut ptr, &mut size, m, name.as_ptr()).result()? };
         Ok((ptr as u64, size))
     }
 }
 
 pub mod event {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
     use core::ffi::c_uint;
 
@@ -1020,8 +987,8 @@ pub unsafe fn launch_cooperative_kernel(
 
 pub mod external_memory {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
     use core::mem::MaybeUninit;
 
@@ -1132,8 +1099,8 @@ pub mod external_memory {
 
 pub mod graph {
     use super::{
-        sys::{self},
         HipError,
+        sys::{self},
     };
     use core::ffi::c_ulonglong;
 
@@ -1165,8 +1132,7 @@ pub mod graph {
     ) -> Result<sys::hipGraphExec_t, HipError> {
         let mut exec: sys::hipGraphExec_t = std::ptr::null_mut();
         unsafe {
-            sys::hipGraphInstantiateWithFlags(&mut exec, graph, flags as c_ulonglong)
-                .result()?
+            sys::hipGraphInstantiateWithFlags(&mut exec, graph, flags as c_ulonglong).result()?
         };
         Ok(exec)
     }
@@ -1214,9 +1180,8 @@ mod tests {
 
         // Seed src from host.
         let src_host: Vec<f32> = (0..1024).map(|i| i as f32).collect();
-        let src_bytes = unsafe {
-            std::slice::from_raw_parts(src_host.as_ptr() as *const u8, bytes)
-        };
+        let src_bytes =
+            unsafe { std::slice::from_raw_parts(src_host.as_ptr() as *const u8, bytes) };
         unsafe { memcpy_htod_sync(src, src_bytes).unwrap() };
 
         // Device-to-device copy.
@@ -1224,9 +1189,8 @@ mod tests {
 
         // Read back via dst.
         let mut dst_host = vec![0f32; 1024];
-        let dst_bytes = unsafe {
-            std::slice::from_raw_parts_mut(dst_host.as_mut_ptr() as *mut u8, bytes)
-        };
+        let dst_bytes =
+            unsafe { std::slice::from_raw_parts_mut(dst_host.as_mut_ptr() as *mut u8, bytes) };
         unsafe { memcpy_dtoh_sync(dst_bytes, dst).unwrap() };
 
         for (i, &v) in dst_host.iter().enumerate() {

@@ -3,9 +3,9 @@
 //! inline (workspace sizing, TF32 semantics, `f16` feature gating).
 
 use super::{result, sys};
-use crate::hipblaslt::result::set_matrix_layout_attribute;
 use crate::hip::sys::{hipDeviceAttribute_t, hipDeviceptr_t};
 use crate::hip::{DevicePtr, DevicePtrMut, HipError, HipSlice, HipStream};
+use crate::hipblaslt::result::set_matrix_layout_attribute;
 use core::ffi::c_int;
 use core::mem;
 use std::sync::Arc;
@@ -189,12 +189,8 @@ impl MatmulDesc {
             let epilogue = act
                 .map(|act| match act {
                     // Act + bias
-                    Activation::Relu => {
-                        sys::hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_RELU_BIAS
-                    }
-                    Activation::Gelu => {
-                        sys::hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_GELU_BIAS
-                    }
+                    Activation::Relu => sys::hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_RELU_BIAS,
+                    Activation::Gelu => sys::hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_GELU_BIAS,
                 })
                 // Bias only
                 .unwrap_or(sys::hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_BIAS);
@@ -599,16 +595,36 @@ mod tests {
         .map(|r| r.map(half::f16::from_f32));
         let b: [[half::f16; N]; K] = [
             [
-                1.1292169, -0.13450263, 0.62789696, -0.5685516, 0.21946938, -1.6661372,
+                1.1292169,
+                -0.13450263,
+                0.62789696,
+                -0.5685516,
+                0.21946938,
+                -1.6661372,
             ],
             [
-                1.0585804, -0.39789402, 0.90205914, 0.989318, -0.3443096, -0.4568837,
+                1.0585804,
+                -0.39789402,
+                0.90205914,
+                0.989318,
+                -0.3443096,
+                -0.4568837,
             ],
             [
-                1.3412506, 0.3059701, -0.9714474, -0.36113533, -1.6809629, -0.9043474,
+                1.3412506,
+                0.3059701,
+                -0.9714474,
+                -0.36113533,
+                -1.6809629,
+                -0.9043474,
             ],
             [
-                3.4746711, -1.0930681, 0.16502666, -0.59988785, 0.41375792, 0.39125723,
+                3.4746711,
+                -1.0930681,
+                0.16502666,
+                -0.59988785,
+                0.41375792,
+                0.39125723,
             ],
         ]
         .map(|r| r.map(half::f16::from_f32));

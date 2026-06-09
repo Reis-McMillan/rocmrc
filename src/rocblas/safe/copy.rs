@@ -29,7 +29,14 @@ impl Copy<f32> for RocBlas {
         let (x, _record_x) = x.device_ptr(&self.stream);
         let (y, _record_y) = y.device_ptr_mut(&self.stream);
         unsafe {
-            result::scopy(self.handle, cfg.n, x as *const _, cfg.incx, y as *mut _, cfg.incy)
+            result::scopy(
+                self.handle,
+                cfg.n,
+                x as *const _,
+                cfg.incx,
+                y as *mut _,
+                cfg.incy,
+            )
         }
     }
 }
@@ -44,7 +51,14 @@ impl Copy<f64> for RocBlas {
         let (x, _record_x) = x.device_ptr(&self.stream);
         let (y, _record_y) = y.device_ptr_mut(&self.stream);
         unsafe {
-            result::dcopy(self.handle, cfg.n, x as *const _, cfg.incx, y as *mut _, cfg.incy)
+            result::dcopy(
+                self.handle,
+                cfg.n,
+                x as *const _,
+                cfg.incx,
+                y as *mut _,
+                cfg.incy,
+            )
         }
     }
 }

@@ -20,7 +20,10 @@ void vec_add(float* out, const float* a, const float* b, int n) {
 fn main() {
     let ctx = HipContext::new(0).expect("HipContext::new failed");
     let stream = ctx.default_stream();
-    println!("device  = {}", ctx.name().unwrap_or_else(|_| "<unknown>".into()));
+    println!(
+        "device  = {}",
+        ctx.name().unwrap_or_else(|_| "<unknown>".into())
+    );
 
     let gfx = ctx.gfx_version().expect("unsupported gfx arch");
     println!("gfx     = {gfx}");

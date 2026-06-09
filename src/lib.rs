@@ -7,17 +7,17 @@
 pub mod hip;
 pub mod hiprtc;
 
-#[cfg(feature = "rocblas")]
-pub mod rocblas;
 #[cfg(feature = "hipblaslt")]
 pub mod hipblaslt;
+#[cfg(feature = "rocblas")]
+pub mod rocblas;
 
 pub use hip::{
-    profiler_start, profiler_stop, DevicePtr, DevicePtrMut, DeviceRepr, DeviceSlice,
-    EventWaitFlags, ExternalMemory, HipContext, HipError, HipEvent, HipFunction, HipGraph,
-    HipModule, HipSlice, HipStream, HipUnifiedSlice, HipUnifiedView, HipUnifiedViewMut,
-    HipView, HipViewMut, HostSlice, LaunchArgs, LaunchConfig, MappedBuffer, MemAttachFlags,
-    PinnedHostSlice, Profiler, PushKernelArg, StreamKind, SyncOnDrop, ValidAsZeroBits,
+    DevicePtr, DevicePtrMut, DeviceRepr, DeviceSlice, EventWaitFlags, ExternalMemory, HipContext,
+    HipError, HipEvent, HipFunction, HipGraph, HipModule, HipSlice, HipStream, HipUnifiedSlice,
+    HipUnifiedView, HipUnifiedViewMut, HipView, HipViewMut, HostSlice, LaunchArgs, LaunchConfig,
+    MappedBuffer, MemAttachFlags, PinnedHostSlice, Profiler, PushKernelArg, StreamKind, SyncOnDrop,
+    ValidAsZeroBits, profiler_start, profiler_stop,
 };
 pub use hiprtc::{HiprtcError, Hsaco};
 
@@ -40,8 +40,7 @@ pub fn get_lib_name_candidates(lib_name: &str) -> Vec<String> {
     let major = env!("ROCM_MAJOR_VERSION");
     let minor = env!("ROCM_MINOR_VERSION");
 
-    let rocm_path =
-        std::env::var("ROCM_PATH").unwrap_or_else(|_| "/opt/rocm".to_string());
+    let rocm_path = std::env::var("ROCM_PATH").unwrap_or_else(|_| "/opt/rocm".to_string());
 
     let stems = [
         // Bare soname; resolved via LD_LIBRARY_PATH / ldconfig.
@@ -57,7 +56,7 @@ pub fn get_lib_name_candidates(lib_name: &str) -> Vec<String> {
 
     let mut out = Vec::with_capacity(stems.len() * 2);
     for stem in &stems {
-        out.push(stem.clone());                    // search via loader
+        out.push(stem.clone()); // search via loader
         out.push(format!("{rocm_path}/lib/{stem}")); // explicit ROCm install
     }
     out

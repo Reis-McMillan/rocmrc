@@ -1,6 +1,6 @@
 use super::{result, result::RocblasError, sys};
-use crate::rocblas::RocBlas;
 use crate::hip::{DevicePtr, DevicePtrMut};
+use crate::rocblas::RocBlas;
 
 #[derive(Debug, Copy, Clone)]
 pub struct GemvConfig<T> {
@@ -11,7 +11,7 @@ pub struct GemvConfig<T> {
     pub lda: sys::rocblas_int,
     pub incx: sys::rocblas_int,
     pub beta: T,
-    pub incy: sys::rocblas_int
+    pub incy: sys::rocblas_int,
 }
 
 pub trait Gemv<T> {

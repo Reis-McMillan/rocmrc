@@ -51,9 +51,7 @@ impl RocBlas {
         &self,
         pointer_mode: sys::rocblas_pointer_mode,
     ) -> Result<(), RocblasError> {
-        unsafe {
-            sys::rocblas_set_pointer_mode(self.handle, pointer_mode).result()
-        }
+        unsafe { sys::rocblas_set_pointer_mode(self.handle, pointer_mode).result() }
     }
 
     pub fn get_pointer_mode(&self) -> Result<sys::rocblas_pointer_mode, RocblasError> {

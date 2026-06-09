@@ -12,7 +12,10 @@ use rocmrc::hipblaslt::{Activation, HipBlasLT, Matmul, MatmulConfig};
 fn main() {
     let ctx = HipContext::new(0).expect("HipContext");
     let stream = ctx.default_stream();
-    println!("device  = {}", ctx.name().unwrap_or_else(|_| "<unknown>".into()));
+    println!(
+        "device  = {}",
+        ctx.name().unwrap_or_else(|_| "<unknown>".into())
+    );
 
     // ----- shapes (column-major) -----
     const M: usize = 64;

@@ -59,14 +59,8 @@ pub fn create_matrix_layout(
 ) -> Result<sys::hipblasLtMatrixLayout_t, HipblasError> {
     let mut matrix_layout = MaybeUninit::uninit();
     unsafe {
-        sys::hipblasLtMatrixLayoutCreate(
-            matrix_layout.as_mut_ptr(),
-            matrix_type,
-            rows,
-            cols,
-            ld,
-        )
-        .result()?;
+        sys::hipblasLtMatrixLayoutCreate(matrix_layout.as_mut_ptr(), matrix_type, rows, cols, ld)
+            .result()?;
         Ok(matrix_layout.assume_init())
     }
 }
@@ -82,9 +76,7 @@ pub fn set_matrix_layout_attribute(
     buf: *const c_void,
     buf_size: usize,
 ) -> Result<(), HipblasError> {
-    unsafe {
-        sys::hipblasLtMatrixLayoutSetAttribute(matrix_layout, attr, buf, buf_size).result()
-    }
+    unsafe { sys::hipblasLtMatrixLayoutSetAttribute(matrix_layout, attr, buf, buf_size).result() }
 }
 
 /// Destroy a matrix layout descriptor.
@@ -123,9 +115,7 @@ pub fn set_matmul_desc_attribute(
     buf: *const c_void,
     buf_size: usize,
 ) -> Result<(), HipblasError> {
-    unsafe {
-        sys::hipblasLtMatmulDescSetAttribute(matmul_desc, attr, buf, buf_size).result()
-    }
+    unsafe { sys::hipblasLtMatmulDescSetAttribute(matmul_desc, attr, buf, buf_size).result() }
 }
 
 /// Destroy a matrix multiply descriptor.
@@ -133,9 +123,7 @@ pub fn set_matmul_desc_attribute(
 /// # Safety
 /// `matmul_desc` must not have been freed already.
 /// Wraps `hipblasLtMatmulDescDestroy`. See the [hipBLASLt docs](https://rocm.docs.amd.com/projects/hipBLASLt/en/latest/reference/index.html).
-pub fn destroy_matmul_desc(
-    matmul_desc: sys::hipblasLtMatmulDesc_t,
-) -> Result<(), HipblasError> {
+pub fn destroy_matmul_desc(matmul_desc: sys::hipblasLtMatmulDesc_t) -> Result<(), HipblasError> {
     unsafe { sys::hipblasLtMatmulDescDestroy(matmul_desc).result() }
 }
 
@@ -160,9 +148,7 @@ pub fn set_matmul_pref_attribute(
     buf: *const c_void,
     buf_size: usize,
 ) -> Result<(), HipblasError> {
-    unsafe {
-        sys::hipblasLtMatmulPreferenceSetAttribute(matmul_pref, attr, buf, buf_size).result()
-    }
+    unsafe { sys::hipblasLtMatmulPreferenceSetAttribute(matmul_pref, attr, buf, buf_size).result() }
 }
 
 /// Destroy a matmul preferences descriptor previously created with

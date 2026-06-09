@@ -259,15 +259,14 @@ unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b HipView<'c, T>> for LaunchA
                 self.records.push(r);
             }
         }
-        self.args.push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
+        self.args
+            .push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
         self
     }
 }
 
 // 5. &mut HipViewMut — same as &mut HipSlice, uses `arg.ptr`.
-unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b mut HipViewMut<'c, T>>
-    for LaunchArgs<'a>
-{
+unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b mut HipViewMut<'c, T>> for LaunchArgs<'a> {
     #[inline(always)]
     fn arg(&mut self, arg: &'b mut HipViewMut<'c, T>) -> &mut Self {
         if self.stream.ctx.is_managing_stream_synchronization() {
@@ -279,7 +278,8 @@ unsafe impl<'a, 'b: 'a, 'c: 'b, T> PushKernelArg<&'b mut HipViewMut<'c, T>>
                 self.records.push(w);
             }
         }
-        self.args.push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
+        self.args
+            .push((&arg.ptr) as *const sys::hipDeviceptr_t as _);
         self
     }
 }
@@ -303,7 +303,13 @@ mod tests {
     const ASSERT_PRELUDE: &str =
         "#define assert(cond) do { if (!(cond)) __builtin_trap(); } while (0)\n";
 
-    fn compile(src: &str, name: &str) -> (std::sync::Arc<crate::hip::safe::HipContext>, crate::hip::safe::HipFunction) {
+    fn compile(
+        src: &str,
+        name: &str,
+    ) -> (
+        std::sync::Arc<crate::hip::safe::HipContext>,
+        crate::hip::safe::HipFunction,
+    ) {
         let ctx = HipContext::new(0).unwrap();
         let gfx = ctx.gfx_version().expect("unsupported gfx arch");
         let full_src = format!("{ASSERT_PRELUDE}{src}");
@@ -711,14 +717,8 @@ void slow_worker(int* out) {
         p_start.record(s1_ref).unwrap();
         s2.wait(&p_start).unwrap();
         unsafe {
-            s1.launch_builder(&f)
-                .arg(&mut buf1)
-                .launch(cfg)
-                .unwrap();
-            s2.launch_builder(&f)
-                .arg(&mut buf2)
-                .launch(cfg)
-                .unwrap();
+            s1.launch_builder(&f).arg(&mut buf1).launch(cfg).unwrap();
+            s2.launch_builder(&f).arg(&mut buf2).launch(cfg).unwrap();
         }
         s1.join(&s2).unwrap();
         p_end.record(s1_ref).unwrap();
@@ -755,14 +755,8 @@ void slow_worker(int* out) {
         start.record(&s1).unwrap();
         s2.wait(&start).unwrap();
         unsafe {
-            s1.launch_builder(&f)
-                .arg(&mut buf1)
-                .launch(cfg)
-                .unwrap();
-            s2.launch_builder(&f)
-                .arg(&mut buf2)
-                .launch(cfg)
-                .unwrap();
+            s1.launch_builder(&f).arg(&mut buf1).launch(cfg).unwrap();
+            s2.launch_builder(&f).arg(&mut buf2).launch(cfg).unwrap();
         }
         s1.join(&s2).unwrap();
         end.record(&s1).unwrap();
@@ -786,18 +780,12 @@ void slow_worker(int* out) {
         };
 
         unsafe {
-            s1.launch_builder(&f)
-                .arg(&mut shared)
-                .launch(cfg)
-                .unwrap();
+            s1.launch_builder(&f).arg(&mut shared).launch(cfg).unwrap();
         }
         // Same `&mut` shared between two streams in sequence — the second
         // launch's PushKernelArg should record waits on the prior write.
         unsafe {
-            s2.launch_builder(&f)
-                .arg(&mut shared)
-                .launch(cfg)
-                .unwrap();
+            s2.launch_builder(&f).arg(&mut shared).launch(cfg).unwrap();
         }
         s1.synchronize().unwrap();
         s2.synchronize().unwrap();
@@ -861,8 +849,7 @@ void peer_slow_worker(const float* data, size_t len, float* out) {
         ctx1.bind_to_thread()?;
 
         let gfx = ctx1.gfx_version().expect("unsupported gfx arch");
-        let hsaco = crate::hiprtc::compile_hsaco(PEER_SLOW_KERNELS, gfx)
-            .expect("hipRTC compile");
+        let hsaco = crate::hiprtc::compile_hsaco(PEER_SLOW_KERNELS, gfx).expect("hipRTC compile");
         let module = ctx1.load_module(hsaco)?;
         let slow_worker = module.load_function("peer_slow_worker")?;
 
