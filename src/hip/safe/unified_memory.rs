@@ -537,7 +537,7 @@ impl<T> HostSlice<T> for HipUnifiedSlice<T> {
         stream.context().record_err(self.check_device_access(stream));
         stream.context().record_err(stream.wait(&self.event));
         (
-            std::slice::from_raw_parts(self.hip_device_ptr as *const T, self.len),
+            unsafe { std::slice::from_raw_parts(self.hip_device_ptr as *const T, self.len) },
             SyncOnDrop::Record(Some((&self.event, stream))),
         )
     }
@@ -549,7 +549,7 @@ impl<T> HostSlice<T> for HipUnifiedSlice<T> {
         stream.context().record_err(self.check_device_access(stream));
         stream.context().record_err(stream.wait(&self.event));
         (
-            std::slice::from_raw_parts_mut(self.hip_device_ptr as *mut T, self.len),
+            unsafe { std::slice::from_raw_parts_mut(self.hip_device_ptr as *mut T, self.len) },
             SyncOnDrop::Record(Some((&self.event, stream))),
         )
     }
@@ -677,7 +677,7 @@ impl<T> HostSlice<T> for HipUnifiedView<'_, T> {
         ));
         stream.context().record_err(stream.wait(self.event));
         (
-            std::slice::from_raw_parts(self.ptr as *const T, self.len),
+            unsafe { std::slice::from_raw_parts(self.ptr as *const T, self.len) },
             SyncOnDrop::Record(Some((self.event, stream))),
         )
     }
@@ -694,7 +694,7 @@ impl<T> HostSlice<T> for HipUnifiedView<'_, T> {
         ));
         stream.context().record_err(stream.wait(self.event));
         (
-            std::slice::from_raw_parts_mut(self.ptr as *mut T, self.len),
+            unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut T, self.len) },
             SyncOnDrop::Record(Some((self.event, stream))),
         )
     }
@@ -716,7 +716,7 @@ impl<T> HostSlice<T> for HipUnifiedViewMut<'_, T> {
         ));
         stream.context().record_err(stream.wait(self.event));
         (
-            std::slice::from_raw_parts(self.ptr as *const T, self.len),
+            unsafe { std::slice::from_raw_parts(self.ptr as *const T, self.len) },
             SyncOnDrop::Record(Some((self.event, stream))),
         )
     }
@@ -733,7 +733,7 @@ impl<T> HostSlice<T> for HipUnifiedViewMut<'_, T> {
         ));
         stream.context().record_err(stream.wait(self.event));
         (
-            std::slice::from_raw_parts_mut(self.ptr as *mut T, self.len),
+            unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut T, self.len) },
             SyncOnDrop::Record(Some((self.event, stream))),
         )
     }

@@ -834,13 +834,13 @@ impl<T, const N: usize> HostSlice<T> for [T; N] {
     }
     unsafe fn stream_synced_slice<'a>(
         &'a self,
-        stream: &'a HipStream,
+        _stream: &'a HipStream,
     ) -> (&'a [T], SyncOnDrop<'a>) {
         (self.as_slice(), SyncOnDrop::Sync(None))
     }
     unsafe fn stream_synced_mut_slice<'a>(
         &'a mut self,
-        stream: &'a HipStream,
+        _stream: &'a HipStream,
     ) -> (&'a mut [T], SyncOnDrop<'a>) {
         (self.as_mut_slice(), SyncOnDrop::Sync(None))
     }
@@ -852,13 +852,13 @@ impl<T> HostSlice<T> for [T] {
     }
     unsafe fn stream_synced_slice<'a>(
         &'a self,
-        stream: &'a HipStream,
+        _stream: &'a HipStream,
     ) -> (&'a [T], SyncOnDrop<'a>) {
         (self, SyncOnDrop::Sync(None))
     }
     unsafe fn stream_synced_mut_slice<'a>(
         &'a mut self,
-        stream: &'a HipStream,
+        _stream: &'a HipStream,
     ) -> (&'a mut [T], SyncOnDrop<'a>) {
         (self, SyncOnDrop::Sync(None))
     }
@@ -870,13 +870,13 @@ impl<T> HostSlice<T> for Vec<T> {
     }
     unsafe fn stream_synced_slice<'a>(
         &'a self,
-        stream: &'a HipStream,
+        _stream: &'a HipStream,
     ) -> (&'a [T], SyncOnDrop<'a>) {
         (self.as_slice(), SyncOnDrop::Sync(None))
     }
     unsafe fn stream_synced_mut_slice<'a>(
         &'a mut self,
-        stream: &'a HipStream,
+        _stream: &'a HipStream,
     ) -> (&'a mut [T], SyncOnDrop<'a>) {
         (self.as_mut_slice(), SyncOnDrop::Sync(None))
     }

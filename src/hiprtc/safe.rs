@@ -165,7 +165,7 @@ pub fn compile_hsaco_with_opts<S: AsRef<str>>(
         let root = std::env::var("ROCM_PATH").unwrap_or_else(|_| "/opt/rocm".to_string());
         format!("{root}/include")
     };
-    if !opts.include_paths.iter().any(|p| *p == rocm_include) {
+    if !opts.include_paths.contains(&rocm_include) {
         opts.include_paths.push(rocm_include);
     }
     let prog = Program::create(src, opts.name.as_deref())?;

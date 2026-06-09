@@ -48,7 +48,7 @@ impl Drop for HipBlasLT {
     fn drop(&mut self) {
         let handle = mem::replace(&mut self.handle, std::ptr::null_mut());
         if !handle.is_null() {
-            unsafe { result::destroy_handle(handle) }.unwrap();
+            result::destroy_handle(handle).unwrap();
         }
     }
 }
@@ -111,22 +111,20 @@ impl MatrixLayout {
     }
 
     fn set_batch(&self, size: c_int, stride: i64) -> Result<(), HipblasError> {
-        unsafe {
-            // Set batch size
-            set_matrix_layout_attribute(
-                self.handle,
-                sys::hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-                (&size) as *const _ as *const _,
-                mem::size_of::<c_int>(),
-            )?;
-            // Set batch stride
-            set_matrix_layout_attribute(
-                self.handle,
-                sys::hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
-                (&stride) as *const _ as *const _,
-                mem::size_of::<i64>(),
-            )?;
-        }
+        // Set batch size
+        set_matrix_layout_attribute(
+            self.handle,
+            sys::hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
+            (&size) as *const _ as *const _,
+            mem::size_of::<c_int>(),
+        )?;
+        // Set batch stride
+        set_matrix_layout_attribute(
+            self.handle,
+            sys::hipblasLtMatrixLayoutAttribute_t::HIPBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
+            (&stride) as *const _ as *const _,
+            mem::size_of::<i64>(),
+        )?;
         Ok(())
     }
 }
@@ -134,10 +132,7 @@ impl MatrixLayout {
 impl Drop for MatrixLayout {
     fn drop(&mut self) {
         // panic on failure (mirrors cudarc)
-        unsafe {
-            result::destroy_matrix_layout(self.handle)
-                .expect("Unable to destroy matrix layout")
-        }
+        result::destroy_matrix_layout(self.handle).expect("Unable to destroy matrix layout")
     }
 }
 
@@ -171,14 +166,12 @@ impl MatmulDesc {
             Matrix::B => sys::hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_TRANSB,
         };
 
-        unsafe {
-            result::set_matmul_desc_attribute(
-                self.handle,
-                attr,
-                (&transpose) as *const _ as *const _,
-                mem::size_of::<u32>(),
-            )?;
-        }
+        result::set_matmul_desc_attribute(
+            self.handle,
+            attr,
+            (&transpose) as *const _ as *const _,
+            mem::size_of::<u32>(),
+        )?;
         Ok(())
     }
 
@@ -207,14 +200,12 @@ impl MatmulDesc {
                 .unwrap_or(sys::hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_BIAS);
 
             // Set bias device pointer on the matmul descriptor.
-            unsafe {
-                result::set_matmul_desc_attribute(
-                    self.handle,
-                    sys::hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_BIAS_POINTER,
-                    bias_ptr as *const hipDeviceptr_t as *const _,
-                    mem::size_of::<hipDeviceptr_t>(),
-                )?;
-            }
+            result::set_matmul_desc_attribute(
+                self.handle,
+                sys::hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_BIAS_POINTER,
+                bias_ptr as *const hipDeviceptr_t as *const _,
+                mem::size_of::<hipDeviceptr_t>(),
+            )?;
 
             epilogue
         } else if let Some(act) = act {
@@ -228,24 +219,19 @@ impl MatmulDesc {
             sys::hipblasLtEpilogue_t::HIPBLASLT_EPILOGUE_DEFAULT
         };
 
-        unsafe {
-            result::set_matmul_desc_attribute(
-                self.handle,
-                sys::hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_EPILOGUE,
-                (&epilogue) as *const _ as *const _,
-                mem::size_of::<sys::hipblasLtMatmulDescAttributes_t>(),
-            )?;
-        }
+        result::set_matmul_desc_attribute(
+            self.handle,
+            sys::hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_EPILOGUE,
+            (&epilogue) as *const _ as *const _,
+            mem::size_of::<sys::hipblasLtMatmulDescAttributes_t>(),
+        )?;
         Ok(())
     }
 }
 
 impl Drop for MatmulDesc {
     fn drop(&mut self) {
-        unsafe {
-            result::destroy_matmul_desc(self.handle)
-                .expect("Unable to destroy matmul desc")
-        }
+        result::destroy_matmul_desc(self.handle).expect("Unable to destroy matmul desc")
     }
 }
 
@@ -264,24 +250,19 @@ impl MatmulPref {
     }
 
     fn set_workspace_size(&self, size: usize) -> Result<(), HipblasError> {
-        unsafe {
-            result::set_matmul_pref_attribute(
-                self.handle,
-                sys::hipblasLtMatmulPreferenceAttributes_t::HIPBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
-                (&size) as *const _ as *const _,
-                mem::size_of::<usize>(),
-            )?;
-        }
+        result::set_matmul_pref_attribute(
+            self.handle,
+            sys::hipblasLtMatmulPreferenceAttributes_t::HIPBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
+            (&size) as *const _ as *const _,
+            mem::size_of::<usize>(),
+        )?;
         Ok(())
     }
 }
 
 impl Drop for MatmulPref {
     fn drop(&mut self) {
-        unsafe {
-            result::destroy_matmul_pref(self.handle)
-                .expect("Unable to destroy matmul pref")
-        }
+        result::destroy_matmul_pref(self.handle).expect("Unable to destroy matmul pref")
     }
 }
 
@@ -394,46 +375,42 @@ pub trait Matmul<T>: MatmulShared {
         // Heuristic search.
         let matmul_pref = MatmulPref::new()?;
         matmul_pref.set_workspace_size(self.workspace().size)?;
-        let heuristic = unsafe {
-            result::get_matmul_algo_heuristic(
-                *self.handle(),
-                matmul_desc.handle,
-                a_layout.handle,
-                b_layout.handle,
-                c_layout.handle,
-                c_layout.handle,
-                matmul_pref.handle,
-            )
-        }?;
+        let heuristic = result::get_matmul_algo_heuristic(
+            *self.handle(),
+            matmul_desc.handle,
+            a_layout.handle,
+            b_layout.handle,
+            c_layout.handle,
+            c_layout.handle,
+            matmul_pref.handle,
+        )?;
 
         // Launch the matmul.
         let (a, _record_a) = a.device_ptr(stream);
         let (b, _record_b) = b.device_ptr(stream);
         let (c, _record_c) = c.device_ptr_mut(stream);
         let (w, _record_w) = workspace.buffer.device_ptr(stream);
-        unsafe {
-            result::matmul(
-                *self.handle(),
-                matmul_desc.handle,
-                (&cfg.alpha) as *const _ as *const _,
-                (&cfg.beta) as *const _ as *const _,
-                a as *const _,
-                a_layout.handle,
-                b as *const _,
-                b_layout.handle,
-                c as *const _,
-                c_layout.handle,
-                c as *mut _,
-                c_layout.handle,
-                (&heuristic.algo) as *const _,
-                w as *mut _,
-                workspace.size,
-                // hip::sys and hipblaslt::sys each redeclare ihipStream_t;
-                // rustc treats them as distinct nominal types. Cast at
-                // the bridge (same pattern as rocblas).
-                stream.hip_stream().cast(),
-            )
-        }
+        result::matmul(
+            *self.handle(),
+            matmul_desc.handle,
+            (&cfg.alpha) as *const _ as *const _,
+            (&cfg.beta) as *const _ as *const _,
+            a as *const _,
+            a_layout.handle,
+            b as *const _,
+            b_layout.handle,
+            c as *const _,
+            c_layout.handle,
+            c as *mut _,
+            c_layout.handle,
+            (&heuristic.algo) as *const _,
+            w as *mut _,
+            workspace.size,
+            // hip::sys and hipblaslt::sys each redeclare ihipStream_t;
+            // rustc treats them as distinct nominal types. Cast at
+            // the bridge (same pattern as rocblas).
+            stream.hip_stream().cast(),
+        )
     }
 }
 
