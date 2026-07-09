@@ -8,7 +8,7 @@ fn load<F: Copy>(name: &str) -> F {
 }
 #[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043"))]
 pub const HIPBLASLT_VERSION_MAJOR: u32 = 0;
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 pub const HIPBLASLT_VERSION_MAJOR: u32 = 1;
 #[cfg(any(rocm_ver = "06002"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 6;
@@ -24,7 +24,7 @@ pub const HIPBLASLT_VERSION_MINOR: u32 = 12;
 pub const HIPBLASLT_VERSION_MINOR: u32 = 0;
 #[cfg(any(rocm_ver = "07011"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 1;
-#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 2;
 #[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033"))]
 pub const HIPBLASLT_VERSION_PATCH: u32 = 0;
@@ -32,7 +32,7 @@ pub const HIPBLASLT_VERSION_PATCH: u32 = 0;
 pub const HIPBLASLT_VERSION_PATCH: u32 = 1;
 #[cfg(any(rocm_ver = "07002", rocm_ver = "07011"))]
 pub const HIPBLASLT_VERSION_PATCH: u32 = 0;
-#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 pub const HIPBLASLT_VERSION_PATCH: u32 = 2;
 #[cfg(any(rocm_ver = "06002"))]
 pub const HIPBLASLT_VERSION_TWEAK: f64 = 5925180000000.0;
@@ -131,7 +131,7 @@ pub enum hipDataType {
     HIP_R_8F_E4M3_FNUZ = 1000,
     HIP_R_8F_E5M2_FNUZ = 1001,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipDataType {
@@ -195,7 +195,7 @@ pub enum hipblasComputeType_t {
     HIPBLAS_COMPUTE_32I = 9,
     HIPBLAS_COMPUTE_32I_PEDANTIC = 10,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasComputeType_t {
@@ -329,7 +329,7 @@ pub enum hipblasLtEpilogue_t {
     HIPBLASLT_EPILOGUE_CLAMP_AUX_EXT = 131200,
     HIPBLASLT_EPILOGUE_CLAMP_AUX_BIAS_EXT = 131204,
 }
-#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtEpilogue_t {
@@ -450,7 +450,7 @@ pub enum hipblasLtMatmulDescAttributes_t {
     HIPBLASLT_MATMUL_DESC_COMPUTE_INPUT_TYPE_B_EXT = 101,
     HIPBLASLT_MATMUL_DESC_MAX = 102,
 }
-#[cfg(any(rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulDescAttributes_t {
@@ -478,7 +478,7 @@ pub enum hipblasLtMatmulDescAttributes_t {
     HIPBLASLT_MATMUL_DESC_EPILOGUE_ACT_ARG1_EXT = 103,
     HIPBLASLT_MATMUL_DESC_MAX = 104,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulMatrixScale_t {
@@ -523,7 +523,7 @@ pub enum hipblasLtOrder_t {
     HIPBLASLT_ORDER_COL = 0,
     HIPBLASLT_ORDER_ROW = 1,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtOrder_t {
@@ -541,7 +541,7 @@ pub enum hipblasLtPointerMode_t {
     HIPBLASLT_POINTER_MODE_HOST = 0,
     HIPBLASLT_POINTER_MODE_ALPHA_DEVICE_VECTOR_BETA_HOST = 1,
 }
-#[cfg(any(rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043", rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043", rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtPointerMode_t {
@@ -669,7 +669,7 @@ pub struct hipblasLtMatrixTransformDescOpaque_t {
 pub struct hipblaslt_bf8 {
     pub data: u8,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_bf8 {
@@ -681,7 +681,7 @@ pub struct hipblaslt_bf8 {
 pub struct hipblaslt_bf8_fnuz {
     pub data: u8,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_bf8_fnuz {
@@ -693,7 +693,7 @@ pub struct hipblaslt_bf8_fnuz {
 pub struct hipblaslt_f8 {
     pub data: u8,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_f8 {
@@ -705,7 +705,7 @@ pub struct hipblaslt_f8 {
 pub struct hipblaslt_f8_fnuz {
     pub data: u8,
 }
-#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023", rocm_ver = "07024"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_f8_fnuz {

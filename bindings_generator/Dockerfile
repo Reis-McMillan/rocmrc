@@ -39,7 +39,7 @@ RUN mkdir -p /etc/apt/keyrings \
 
 # Canonical install location for the shared rocm-llvm (clang/libclang).
 # This is the version whose llvm tree everyone else symlinks to.
-ARG SHARED_LLVM_VERSION="7.2.3"
+ARG SHARED_LLVM_VERSION="7.2.4"
 
 # Install rocm-llvm ONCE from the canonical version. Saves ~15 GB of duplicate
 # clang installs across the per-version loop. bindgen only cares about clang
@@ -68,7 +68,7 @@ RUN set -eux; \
 # second version refuses or upgrades. We sidestep apt's package db entirely:
 # `apt-get download` fetches the .debs, then `dpkg-deb -x` unpacks them into
 # per-version /opt/rocm-X.Y.Z trees (which is the layout the .debs ship with).
-ARG ROCM_VERSIONS="6.0.2 6.1.5 6.2.4 6.3.3 6.4.3 7.0.2 7.1.1 7.2.1 7.2.2 7.2.3"
+ARG ROCM_VERSIONS="6.0.2 6.1.5 6.2.4 6.3.3 6.4.3 7.0.2 7.1.1 7.2.1 7.2.2 7.2.3 7.2.4"
 # hipblas-dev and hipblas-common-dev are complementary across the 6.x → 7.x
 # split: older versions ship `hipblas/hipblas.h` from hipblas-dev; 6.4+ moved
 # the public type defs into hipblas-common-dev. hipblaslt.h transitively

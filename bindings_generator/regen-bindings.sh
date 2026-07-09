@@ -3,7 +3,7 @@
 #
 # Loops bindings_generator over every supported ROCm version for the BLAS
 # modules (which is the whole point of the version axis), then regenerates
-# driver + hiprtc once against the newest install (HIP runtime / hipRTC APIs
+# hip + hiprtc once against the newest install (HIP runtime / hipRTC APIs
 # are stable across ROCm releases so per-version is unnecessary).
 #
 # Outputs land via the bind-mounted workspace:
@@ -16,8 +16,8 @@
 
 set -eu
 
-VERSIONS="6.0.2 6.1.5 6.2.4 6.3.3 6.4.3 7.0.2 7.1.1 7.2.1 7.2.2 7.2.3"
-LATEST="7.2.3"
+VERSIONS="6.0.2 6.1.5 6.2.4 6.3.3 6.4.3 7.0.2 7.1.1 7.2.1 7.2.2 7.2.3 7.2.4"
+LATEST="7.2.4"
 
 # Capture the workspace owner once so we can hand outputs back at exit. EXIT
 # trap (not just success) so even a failed bindgen leaves the partial outputs
@@ -29,7 +29,7 @@ chown_back() {
         chown -R "$HOST_UID:$HOST_GID" /workspace/bindings_generator/out
     [ -d /workspace/.cargo-container ] && \
         chown -R "$HOST_UID:$HOST_GID" /workspace/.cargo-container
-    for mod in driver hiprtc rocblas hipblaslt; do
+    for mod in hip hiprtc rocblas hipblaslt; do
         [ -e "/workspace/src/$mod/sys/mod.rs" ] && \
             chown "$HOST_UID:$HOST_GID" "/workspace/src/$mod/sys/mod.rs"
     done
@@ -54,12 +54,12 @@ for ver in $VERSIONS; do
         --target hipblaslt
 done
 
-# Driver + hiprtc: one-shot against the newest ROCm.
-echo "=== driver + hiprtc @ ROCm $LATEST (one-shot) ==="
+# hip + hiprtc: one-shot against the newest ROCm.
+echo "=== hip + hiprtc @ ROCm $LATEST (one-shot) ==="
 cargo run --quiet --release -p bindings_generator -- \
     --rocm-path  "/opt/rocm-$LATEST" \
     --rocm-version "$LATEST" \
-    --target driver
+    --target hip
 cargo run --quiet --release -p bindings_generator -- \
     --rocm-path  "/opt/rocm-$LATEST" \
     --rocm-version "$LATEST" \

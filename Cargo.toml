@@ -44,6 +44,7 @@ f16 = []
 "rocm-07021" = []
 "rocm-07022" = []
 "rocm-07023" = []
+"rocm-07024" = []
 "rocm-version-from-build-system" = []
 
 dynamic-loading = ["dep:libloading"]

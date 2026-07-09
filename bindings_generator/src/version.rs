@@ -18,6 +18,7 @@ impl Version {
         }
     }
 
+    #[allow(unused)]
     pub fn feature_name(&self, prefix: &str) -> String {
         if prefix == "rocm" {
             format!("{prefix}-{:02}{:02}{}", self.major, self.minor, self.patch)
