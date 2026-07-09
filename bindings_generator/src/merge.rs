@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use proc_macro2::TokenStream;
-use quote::{ToTokens, quote};
+use quote::{ToTokens, format_ident, quote};
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::fs;
@@ -16,6 +16,19 @@ use syn::{
 use crate::module::ModuleConfig;
 use crate::version::Version;
 
+/// Emit `#[cfg(any(<prefix>_ver = "<code>", ...))]` for the versions a symbol
+/// is present in. The build script emits `--cfg <prefix>_ver="<code>"`, so the
+/// gate is selectable by an explicit `rocm-*` feature *or* a build-time probe —
+/// neither of which a `#[cfg(feature = ...)]` gate could support from build.rs.
+fn version_cfg_attr(versions: &[&Version], prefix: &str) -> TokenStream {
+    let cfg_ident = format_ident!("{prefix}_ver");
+    let preds = versions
+        .iter()
+        .map(|v| v.cfg_value(prefix))
+        .map(|code| quote! { #cfg_ident = #code });
+    quote! { #[cfg(any(#(#preds),*))] }
+}
+
 /// Build a unified adapter for a single foreign function.
 ///
 /// The emitted adapter has both link strategies inside its body, gated on the
@@ -29,16 +42,10 @@ fn build_adapter(
     n_versions: usize,
     feature_prefix: &str,
 ) -> TokenStream {
-    let features = versions
-        .iter()
-        .map(|v| v.feature_name(feature_prefix))
-        .collect::<Vec<_>>();
     let feature_tok = if versions.len() == n_versions {
         quote! {}
     } else {
-        quote! {
-            #[cfg(any(#(feature=#features),*))]
-        }
+        version_cfg_attr(versions, feature_prefix)
     };
     let sig = &func.sig;
     let fn_name = &sig.ident;
@@ -279,12 +286,10 @@ impl BindingMerger {
                     if !versions.is_empty() {
                         log::debug!("Breaking change detected in {version} for {name}");
                     }
-                    let features = versions
-                        .iter()
-                        .map(|v| v.feature_name(&self.feature_prefix))
-                        .collect::<Vec<_>>();
+                    let refs: Vec<&Version> = versions.iter().collect();
+                    let cfg = version_cfg_attr(&refs, &self.feature_prefix);
                     output.extend(quote! {
-                        #[cfg(any(#(feature = #features), *))]
+                        #cfg
                         #prev_decl
                     });
                     versions.clear();
@@ -297,12 +302,10 @@ impl BindingMerger {
                     if versions.len() == self.n_versions {
                         output.extend(decl.into_token_stream());
                     } else {
-                        let features = versions
-                            .iter()
-                            .map(|v| v.feature_name(&self.feature_prefix))
-                            .collect::<Vec<_>>();
+                        let refs: Vec<&Version> = versions.iter().collect();
+                        let cfg = version_cfg_attr(&refs, &self.feature_prefix);
                         output.extend(quote! {
-                            #[cfg(any(#(feature = #features),*))]
+                            #cfg
                             #decl
                         });
                     }

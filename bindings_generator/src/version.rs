@@ -25,6 +25,19 @@ impl Version {
             format!("{prefix}-{:02}{:03}", self.major, self.minor)
         }
     }
+
+    /// The bare version *code* used as the `<prefix>_ver` cfg value — the
+    /// [`Self::feature_name`] without its `<prefix>-` lead. The build script
+    /// emits `--cfg <prefix>_ver="<code>"`, and the generated `sys` gates key
+    /// off it (rather than `feature = "..."`) so the version can be selected by
+    /// a build-time probe as well as an explicit cargo feature.
+    pub fn cfg_value(&self, prefix: &str) -> String {
+        if prefix == "rocm" {
+            format!("{:02}{:02}{}", self.major, self.minor, self.patch)
+        } else {
+            format!("{:02}{:03}", self.major, self.minor)
+        }
+    }
 }
 
 impl std::fmt::Display for Version {

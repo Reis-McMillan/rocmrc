@@ -6,44 +6,44 @@ use std::sync::OnceLock;
 fn load<F: Copy>(name: &str) -> F {
     unsafe { *rocmlib().get::<F>(name.as_bytes()).unwrap_or_else(|e| panic!("Missing symbol {name}: {e}")) }
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043"))]
 pub const HIPBLASLT_VERSION_MAJOR: u32 = 0;
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 pub const HIPBLASLT_VERSION_MAJOR: u32 = 1;
-#[cfg(any(feature = "rocm-06002"))]
+#[cfg(any(rocm_ver = "06002"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 6;
-#[cfg(any(feature = "rocm-06015"))]
+#[cfg(any(rocm_ver = "06015"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 7;
-#[cfg(any(feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06024"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 8;
-#[cfg(any(feature = "rocm-06033"))]
+#[cfg(any(rocm_ver = "06033"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 10;
-#[cfg(any(feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06043"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 12;
-#[cfg(any(feature = "rocm-07002"))]
+#[cfg(any(rocm_ver = "07002"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 0;
-#[cfg(any(feature = "rocm-07011"))]
+#[cfg(any(rocm_ver = "07011"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 1;
-#[cfg(any(feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 pub const HIPBLASLT_VERSION_MINOR: u32 = 2;
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033"))]
 pub const HIPBLASLT_VERSION_PATCH: u32 = 0;
-#[cfg(any(feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06043"))]
 pub const HIPBLASLT_VERSION_PATCH: u32 = 1;
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011"))]
 pub const HIPBLASLT_VERSION_PATCH: u32 = 0;
-#[cfg(any(feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 pub const HIPBLASLT_VERSION_PATCH: u32 = 2;
-#[cfg(any(feature = "rocm-06002"))]
+#[cfg(any(rocm_ver = "06002"))]
 pub const HIPBLASLT_VERSION_TWEAK: f64 = 5925180000000.0;
-#[cfg(any(feature = "rocm-06015"))]
+#[cfg(any(rocm_ver = "06015"))]
 pub const HIPBLASLT_VERSION_TWEAK: f64 = f64::INFINITY;
 pub type hipStream_t = *mut ihipStream_t;
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 pub type hipblasHalf = u16;
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 pub type hipblasHandle_t = *mut ::core::ffi::c_void;
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 pub type hipblasInt8 = i8;
 pub type hipblasLtBfloat16 = hip_bfloat16;
 pub type hipblasLtFloat = f32;
@@ -57,9 +57,9 @@ pub type hipblasLtMatmulHeuristicResult_t = _hipblasLtMatmulHeuristicResult_t;
 pub type hipblasLtMatmulPreference_t = *mut hipblasLtMatmulPreferenceOpaque_t;
 pub type hipblasLtMatrixLayout_t = *mut hipblasLtMatrixLayoutOpaque_t;
 pub type hipblasLtMatrixTransformDesc_t = *mut hipblasLtMatrixTransformDescOpaque_t;
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 pub type hipblasStride = i64;
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipDataType {
@@ -94,7 +94,7 @@ pub enum hipDataType {
     HIP_R_8F_E4M3_FNUZ = 1000,
     HIP_R_8F_E5M2_FNUZ = 1001,
 }
-#[cfg(any(feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipDataType {
@@ -131,7 +131,7 @@ pub enum hipDataType {
     HIP_R_8F_E4M3_FNUZ = 1000,
     HIP_R_8F_E5M2_FNUZ = 1001,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipDataType {
@@ -172,14 +172,14 @@ pub enum hipDataType {
     HIP_R_8F_E4M3_FNUZ = 1000,
     HIP_R_8F_E5M2_FNUZ = 1001,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasAtomicsMode_t {
     HIPBLAS_ATOMICS_NOT_ALLOWED = 0,
     HIPBLAS_ATOMICS_ALLOWED = 1,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasComputeType_t {
@@ -195,7 +195,7 @@ pub enum hipblasComputeType_t {
     HIPBLAS_COMPUTE_32I = 9,
     HIPBLAS_COMPUTE_32I_PEDANTIC = 10,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasComputeType_t {
@@ -215,7 +215,7 @@ pub enum hipblasComputeType_t {
     HIPBLAS_COMPUTE_32F_FAST_8F8BF_FNUZ = 102,
     HIPBLAS_COMPUTE_32F_FAST_8BF8F_FNUZ = 103,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasDatatype_t {
@@ -237,14 +237,14 @@ pub enum hipblasDatatype_t {
     HIPBLAS_C_16B = 169,
     HIPBLAS_DATATYPE_INVALID = 255,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasDiagType_t {
     HIPBLAS_DIAG_NON_UNIT = 131,
     HIPBLAS_DIAG_UNIT = 132,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasFillMode_t {
@@ -252,13 +252,13 @@ pub enum hipblasFillMode_t {
     HIPBLAS_FILL_MODE_LOWER = 122,
     HIPBLAS_FILL_MODE_FULL = 123,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasGemmAlgo_t {
     HIPBLAS_GEMM_DEFAULT = 160,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasGemmFlags_t {
@@ -268,7 +268,7 @@ pub enum hipblasGemmFlags_t {
     HIPBLAS_GEMM_FLAGS_CHECK_SOLUTION_INDEX = 8,
     HIPBLAS_GEMM_FLAGS_FP16_ALT_IMPL_RNZ = 16,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtEpilogue_t {
@@ -285,7 +285,7 @@ pub enum hipblasLtEpilogue_t {
     HIPBLASLT_EPILOGUE_BGRADA = 256,
     HIPBLASLT_EPILOGUE_BGRADB = 512,
 }
-#[cfg(any(feature = "rocm-07002"))]
+#[cfg(any(rocm_ver = "07002"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtEpilogue_t {
@@ -304,7 +304,7 @@ pub enum hipblasLtEpilogue_t {
     HIPBLASLT_EPILOGUE_SWISH_EXT = 65536,
     HIPBLASLT_EPILOGUE_SWISH_BIAS_EXT = 65540,
 }
-#[cfg(any(feature = "rocm-07011"))]
+#[cfg(any(rocm_ver = "07011"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtEpilogue_t {
@@ -329,7 +329,7 @@ pub enum hipblasLtEpilogue_t {
     HIPBLASLT_EPILOGUE_CLAMP_AUX_EXT = 131200,
     HIPBLASLT_EPILOGUE_CLAMP_AUX_BIAS_EXT = 131204,
 }
-#[cfg(any(feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtEpilogue_t {
@@ -356,7 +356,7 @@ pub enum hipblasLtEpilogue_t {
     HIPBLASLT_EPILOGUE_SIGMOID_EXT = 262144,
     HIPBLASLT_EPILOGUE_SIGMOID_BIAS_EXT = 262148,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulDescAttributes_t {
@@ -376,7 +376,7 @@ pub enum hipblasLtMatmulDescAttributes_t {
     HIPBLASLT_MATMUL_DESC_POINTER_MODE = 13,
     HIPBLASLT_MATMUL_DESC_MAX = 101,
 }
-#[cfg(any(feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulDescAttributes_t {
@@ -399,7 +399,7 @@ pub enum hipblasLtMatmulDescAttributes_t {
     HIPBLASLT_MATMUL_DESC_COMPUTE_INPUT_TYPE_B_EXT = 101,
     HIPBLASLT_MATMUL_DESC_MAX = 102,
 }
-#[cfg(any(feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulDescAttributes_t {
@@ -424,7 +424,7 @@ pub enum hipblasLtMatmulDescAttributes_t {
     HIPBLASLT_MATMUL_DESC_B_SCALE_POINTER_VEC_EXT = 103,
     HIPBLASLT_MATMUL_DESC_MAX = 104,
 }
-#[cfg(any(feature = "rocm-07002"))]
+#[cfg(any(rocm_ver = "07002"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulDescAttributes_t {
@@ -450,7 +450,7 @@ pub enum hipblasLtMatmulDescAttributes_t {
     HIPBLASLT_MATMUL_DESC_COMPUTE_INPUT_TYPE_B_EXT = 101,
     HIPBLASLT_MATMUL_DESC_MAX = 102,
 }
-#[cfg(any(feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulDescAttributes_t {
@@ -478,7 +478,7 @@ pub enum hipblasLtMatmulDescAttributes_t {
     HIPBLASLT_MATMUL_DESC_EPILOGUE_ACT_ARG1_EXT = 103,
     HIPBLASLT_MATMUL_DESC_MAX = 104,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtMatmulMatrixScale_t {
@@ -516,14 +516,14 @@ pub enum hipblasLtMatrixTransformDescAttributes_t {
     HIPBLASLT_MATRIX_TRANSFORM_DESC_TRANSA = 2,
     HIPBLASLT_MATRIX_TRANSFORM_DESC_TRANSB = 3,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtOrder_t {
     HIPBLASLT_ORDER_COL = 0,
     HIPBLASLT_ORDER_ROW = 1,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtOrder_t {
@@ -534,14 +534,14 @@ pub enum hipblasLtOrder_t {
     HIPBLASLT_ORDER_COL16_4R4 = 102,
     HIPBLASLT_ORDER_COL16_4R2 = 103,
 }
-#[cfg(any(feature = "rocm-06002"))]
+#[cfg(any(rocm_ver = "06002"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtPointerMode_t {
     HIPBLASLT_POINTER_MODE_HOST = 0,
     HIPBLASLT_POINTER_MODE_ALPHA_DEVICE_VECTOR_BETA_HOST = 1,
 }
-#[cfg(any(feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033", feature = "rocm-06043", feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043", rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasLtPointerMode_t {
@@ -549,7 +549,7 @@ pub enum hipblasLtPointerMode_t {
     HIPBLASLT_POINTER_MODE_DEVICE = 1,
     HIPBLASLT_POINTER_MODE_ALPHA_DEVICE_VECTOR_BETA_HOST = 4,
 }
-#[cfg(any(feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasMath_t {
@@ -567,14 +567,14 @@ pub enum hipblasOperation_t {
     HIPBLAS_OP_T = 112,
     HIPBLAS_OP_C = 113,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasPointerMode_t {
     HIPBLAS_POINTER_MODE_HOST = 0,
     HIPBLAS_POINTER_MODE_DEVICE = 1,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum hipblasSideMode_t {
@@ -623,20 +623,20 @@ pub struct _hipblasLtMatmulHeuristicResult_t {
 pub struct hip_bfloat16 {
     pub data: u16,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblasBfloat16 {
     pub data: u16,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct hipblasComplex {
     pub x: f32,
     pub y: f32,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct hipblasDoubleComplex {
@@ -663,49 +663,49 @@ pub struct hipblasLtMatrixLayoutOpaque_t {
 pub struct hipblasLtMatrixTransformDescOpaque_t {
     pub data: [u64; 8usize],
 }
-#[cfg(any(feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_bf8 {
     pub data: u8,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_bf8 {
     pub __x: u8,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_bf8_fnuz {
     pub data: u8,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_bf8_fnuz {
     pub __x: u8,
 }
-#[cfg(any(feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_f8 {
     pub data: u8,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_f8 {
     pub __x: u8,
 }
-#[cfg(any(feature = "rocm-06002", feature = "rocm-06015", feature = "rocm-06024", feature = "rocm-06033", feature = "rocm-06043"))]
+#[cfg(any(rocm_ver = "06002", rocm_ver = "06015", rocm_ver = "06024", rocm_ver = "06033", rocm_ver = "06043"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_f8_fnuz {
     pub data: u8,
 }
-#[cfg(any(feature = "rocm-07002", feature = "rocm-07011", feature = "rocm-07021", feature = "rocm-07022", feature = "rocm-07023"))]
+#[cfg(any(rocm_ver = "07002", rocm_ver = "07011", rocm_ver = "07021", rocm_ver = "07022", rocm_ver = "07023"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct hipblaslt_f8_fnuz {
