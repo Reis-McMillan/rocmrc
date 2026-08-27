@@ -71,7 +71,7 @@ fn build_adapter(
             {
                 type _F = unsafe extern "C" fn(#(#arg_types),*) #output;
                 static _S: OnceLock<_F> = OnceLock::new();
-                let _f = _S.get_or_init(|| unsafe { load::<_F>(#symbol_str) });
+                let _f = _S.get_or_init(|| load::<_F>(#symbol_str));
                 unsafe { _f(#(#arg_names),*) }
             }
             #[cfg(not(feature = "dynamic-loading"))]

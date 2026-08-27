@@ -426,11 +426,12 @@ impl HipEvent {
 pub struct HipStream {
     pub(crate) hip_stream: sys::hipStream_t,
     pub(crate) ctx: Arc<HipContext>,
+    pub(crate) owned: bool,
 }
 
 impl PartialEq for HipStream {
     fn eq(&self, other: &Self) -> bool {
-        self.hip_stream == other.hip_stream
+        self.hip_stream == other.hip_stream && self.ctx == other.ctx
     }
 }
 impl Eq for HipStream {}
@@ -444,6 +445,9 @@ const HIP_STREAM_PER_THREAD: usize = 0x2;
 
 impl Drop for HipStream {
     fn drop(&mut self) {
+        if !self.owned {
+            return;
+        }
         self.ctx.record_err(self.ctx.bind_to_thread());
         let hip_stream = std::mem::replace(&mut self.hip_stream, std::ptr::null_mut());
         if !hip_stream.is_null() && hip_stream as usize != HIP_STREAM_PER_THREAD {
@@ -460,6 +464,7 @@ impl HipContext {
         Arc::new(HipStream {
             hip_stream: std::ptr::null_mut(),
             ctx: self.clone(),
+            owned: false,
         })
     }
 
@@ -470,6 +475,7 @@ impl HipContext {
         Arc::new(HipStream {
             hip_stream: HIP_STREAM_PER_THREAD as sys::hipStream_t,
             ctx: self.clone(),
+            owned: false
         })
     }
 
@@ -486,7 +492,19 @@ impl HipContext {
         Ok(Arc::new(HipStream {
             hip_stream,
             ctx: self.clone(),
+            owned: true,
         }))
+    }
+
+    pub unsafe fn wrap_borrowed_stream(
+        self: &Arc<Self>,
+        hip_stream: sys::hipStream_t,
+    ) -> Arc<HipStream> {
+        Arc::new(HipStream {
+            hip_stream,
+            ctx: self.clone(),
+            owned: false,
+        })
     }
 
     /// Create a non-blocking stream with the given priority (lower value =
@@ -507,6 +525,7 @@ impl HipContext {
         Ok(Arc::new(HipStream {
             hip_stream,
             ctx: self.clone(),
+            owned: true,
         }))
     }
 }
@@ -521,6 +540,7 @@ impl HipStream {
         let stream = Arc::new(HipStream {
             hip_stream,
             ctx: self.ctx.clone(),
+            owned: true,
         });
         stream.join(self)?;
         Ok(stream)
@@ -1863,6 +1883,28 @@ mod tests {
     fn test_post_build_arc_count() {
         let ctx = HipContext::new(0).unwrap();
         assert_eq!(Arc::strong_count(&ctx), 1);
+    }
+
+    #[test]
+    fn test_borrowed_stream_is_not_destroyed_on_drop() {
+        let ctx = HipContext::new(0).unwrap();
+        ctx.bind_to_thread().unwrap();
+        let raw = result::stream::create(result::stream::StreamKind::NonBlocking).unwrap();
+
+        {
+            let stream = unsafe { ctx.wrap_borrowed_stream(raw) };
+            assert_eq!(stream.hip_stream(), raw);
+            assert_eq!(stream.context(), &ctx);
+
+            let data = stream.clone_htod(&[1_u32, 2, 3]).unwrap();
+            stream.synchronize().unwrap();
+            drop(data);
+        }
+
+
+        result::stream::synchronize(raw).unwrap();
+        result::stream::destroy(raw).unwrap();
+
     }
 
     #[test]
