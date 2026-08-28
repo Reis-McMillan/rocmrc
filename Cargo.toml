@@ -3,7 +3,7 @@ members = ["bindings_generator"]
 
 [package]
 name = "rocmrc"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 description = "Minimal safe ROCm bindings (HIP, hipRTC), modeled after cudarc"
 license = "MIT OR Apache-2.0"

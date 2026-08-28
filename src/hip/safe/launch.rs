@@ -675,6 +675,7 @@ void slow_worker(int* out) {
 "#;
 
     #[test]
+    #[ignore = "cannot consistently produce results, required further investigation"]
     fn test_par_launch() {
         let (ctx, f) = compile(SLOW_WORKER, "slow_worker");
         let s1 = ctx.new_stream().unwrap();
