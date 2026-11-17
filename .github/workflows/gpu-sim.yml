@@ -1,0 +1,74 @@
+name: GPU Simulator
+
+# Optional, non-required check. The hosted runners have no GPU, so this runs
+# the vec_add example (hipRTC JIT, launch, result check) on a simulated AMD
+# Instinct MI300X (https://github.com/pantheongpu/pantheonsim). A simulator
+# cannot reproduce hardware-specific behavior or timing, so it complements
+# real-GPU testing and does not replace it.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/**"
+      - "examples/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/gpu-sim.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  vec-add:
+    name: vec_add (simulated MI300X)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ROCM_PATH: /opt/rocm
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up the simulated GPU and ROCm
+        uses: pantheongpu/setup-pantheonsim@a1b9d4237411f9b2b0e0bb895b4d83377f336a7b # v0.1.9
+        with:
+          gpu: amd/mi300x
+          cuda-toolkit: none
+          rocm: "7.1"
+
+      # The action installs only the compiler side of ROCm, which has no
+      # libhiprtc (rocmrc links it). Take it from the hip-runtime-amd package,
+      # not the whole package, which would replace the simulated libamdhip64.
+      - name: Install libhiprtc
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends comgr libhiprtc-builtins5
+          mkdir -p "${RUNNER_TEMP}/hiprtc"
+          cd "${RUNNER_TEMP}/hiprtc"
+          apt-get download hip-runtime-amd
+          dpkg -x hip-runtime-amd_*.deb extract
+          sudo cp -a extract/opt/rocm-*/lib/libhiprtc* "${ROCM_PATH}/lib/"
+
+      - name: Build the example
+        run: cargo build --release --example vec_add
+
+      # The example asserts every output element, so a wrong result makes it
+      # exit non-zero. The grep rejects a run that exited early or printed nothing.
+      - name: Run vec_add on the simulated MI300X
+        run: |
+          set -o pipefail
+          export LD_LIBRARY_PATH="${ROCM_PATH}/lib:${LD_LIBRARY_PATH:-}"
+          vgpu run target/release/examples/vec_add 2>&1 | tee vec_add.log
+          grep -q "sum-check passed" vec_add.log
+          grep -q "gfx     = gfx942" vec_add.log
+          if grep -qiE "panicked|error" vec_add.log; then exit 1; fi
